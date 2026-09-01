@@ -42,12 +42,12 @@ export function IncidentsPanel({
     <div className="border border-terra/40 bg-surface p-5">
       <p className="font-mono text-[10px] uppercase tracking-widest text-terra">Инцидент / обход</p>
       <p className="mt-2 text-[13px] leading-relaxed text-muted">
-        Как на Alibaba: сначала агенты предлагают компенсацию. Рейтинг бьём только если стороны не сошлись и площадка
+        Сначала агенты предлагают компенсацию. Рейтинг бьём только если стороны не сошлись и площадка
         решает по документам в заказе.
       </p>
 
       {list.length === 0 ? (
-        <p className="mt-4 text-[13px] text-muted">Открытых претензий нет. Если срок, оплата или ворота поехали — зафиксируйте факт.</p>
+        <p className="mt-4 text-[13px] text-muted">Открытых претензий нет. Если срок, оплата или приёмка сдвинулись — зафиксируйте факт.</p>
       ) : (
         <ul className="mt-4 space-y-4">
           {list.map((inc) => (

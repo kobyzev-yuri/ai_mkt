@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Ticker } from "@/components/ticker";
 import { Badge, Stat } from "@/components/ui";
 import { ProductCard } from "@/components/product-card";
-import { compactRub, dealStatusLabel, orderStatusLabel, qty, rub } from "@/lib/format";
+import { compactRub, dealStatusLabel, deliveryLine, orderStatusLabel, qty, rub } from "@/lib/format";
 import { companies, DEMO_PROMPTS, products } from "@/lib/seed";
 import { useStore } from "@/lib/store";
 import { productById } from "@/lib/agents";
@@ -26,20 +26,27 @@ export default function HomePage() {
           <span className="text-brass"> Люди утверждают.</span>
         </h1>
         <p className="mt-6 max-w-xl text-[16px] leading-relaxed text-muted">
-          Опишите потребность своими словами. Агент найдёт свободные партии, согласует условия, затем проведёт оплату и отгрузку.
+          Опишите потребность своими словами. Агенты найдут свободные партии, согласуют условия в мандате и проведут
+          отгрузку. Человек утверждает оплату и приёмку.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
-            href="/rfq"
+            href="/buy"
             className="rounded-full bg-brass px-6 py-3 text-[14px] font-medium text-bg hover:bg-brass-2"
           >
-            Запустить агента закупки
+            Кабинет закупщика
           </Link>
           <Link
-            href="/catalog"
+            href="/sell"
             className="rounded-full border border-line px-6 py-3 text-[14px] text-paper hover:border-brass/50"
           >
-            Смотреть каталог
+            Кабинет поставщика
+          </Link>
+          <Link
+            href="/office"
+            className="rounded-full border border-line px-6 py-3 text-[14px] text-paper hover:border-brass/50"
+          >
+            Бэкофис
           </Link>
         </div>
         <p className="mt-5 font-mono text-[11px] text-muted">
@@ -50,13 +57,17 @@ export default function HomePage() {
 
       <div className="mx-auto grid max-w-6xl grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
         <Stat label="В переговорах" value={String(deals.filter((d) => d.status === "countering").length)} />
-        <Stat label="RFQ за сессию" value={String(rfqs.length)} />
+        <Stat label="Заявки за сессию" value={String(rfqs.length)} />
         <Stat label="Закрытый оборот" value={compactRub(turnover || 18_400_000)} hint="демо + ваши сделки" />
         <Stat label="Поставщиков" value={String(companies.filter((c) => c.role === "seller").length)} />
       </div>
 
       <section className="mx-auto max-w-6xl px-5 py-16">
         <h2 className="font-display text-4xl">Как устроена площадка</h2>
+        <p className="mt-3 max-w-2xl text-[14px] text-muted">
+          Три сценария: закупка (S1), исполнение (S2), срыв (S3). Агенты распределяют задачи по сценарию и встречаются
+          в общем контуре сделки — не в свободном чате.
+        </p>
         <div className="mt-8 grid gap-6 md:grid-cols-3 lg:grid-cols-6">
           {[
             {
@@ -67,7 +78,7 @@ export default function HomePage() {
             {
               n: "02",
               t: "Согласование",
-              d: "RFQ и торг в пределах мандата: цена, предоплата, FCA/DAP, объём, кратный паллете или связке.",
+              d: "Запрос и торг в пределах мандата: цена, предоплата, самовывоз или доставка, объём, кратный паллете или связке.",
             },
             {
               n: "03",
@@ -82,7 +93,7 @@ export default function HomePage() {
             {
               n: "05",
               t: "Приёмка",
-              d: "Ворота, акт, остаток по отсрочке. Контур закрывается, когда деньги и товар сошлись.",
+              d: "Приёмка на объекте, акт, остаток по отсрочке. Контур закрывается, когда деньги и товар сошлись.",
             },
             {
               n: "06",
@@ -98,9 +109,17 @@ export default function HomePage() {
           ))}
         </div>
         <p className="mt-6 text-[13px] text-muted">
-          Реалистичный контур — не только happy path.{" "}
-          <Link href="/trust" className="text-brass">
-            Как устроены рейтинги и инциденты →
+          Операции — в кабинетах сторон. Идеология и оценка — в бэкофисе.{" "}
+          <Link href="/buy" className="text-brass">
+            Закупки →
+          </Link>
+          {" · "}
+          <Link href="/sell" className="text-brass">
+            Поставки →
+          </Link>
+          {" · "}
+          <Link href="/office" className="text-brass">
+            Бэкофис →
           </Link>
         </p>
       </section>
@@ -108,8 +127,8 @@ export default function HomePage() {
       <section className="mx-auto max-w-6xl px-5 pb-16">
         <div className="flex items-end justify-between gap-4">
           <h2 className="font-display text-4xl">Живые комнаты</h2>
-          <Link href="/deals" className="font-mono text-[11px] uppercase tracking-widest text-brass">
-            Все сделки →
+          <Link href={company.role === "seller" ? "/sell" : "/buy"} className="font-mono text-[11px] uppercase tracking-widest text-brass">
+            В кабинет →
           </Link>
         </div>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
@@ -137,7 +156,7 @@ export default function HomePage() {
         <div className="flex items-end justify-between gap-4">
           <h2 className="font-display text-4xl">Исполнение</h2>
           <Link href="/orders" className="font-mono text-[11px] uppercase tracking-widest text-brass">
-            Партии в работе →
+            Исполнение в кабинете →
           </Link>
         </div>
         <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -148,7 +167,7 @@ export default function HomePage() {
                 <Badge tone="live">{orderStatusLabel(o.status)}</Badge>
                 <h3 className="mt-3 font-display text-xl">{p.name}</h3>
                 <p className="mt-1 text-[13px] text-muted">
-                  {o.incoterm} {o.destination} · {compactRub(o.total)}
+                  {deliveryLine(o.incoterm, o.destination)} · {compactRub(o.total)}
                   {(o.incidents ?? []).some((i) => i.status !== "resolved") ? " · открыт инцидент" : ""}
                 </p>
               </Link>

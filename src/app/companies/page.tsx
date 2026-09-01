@@ -14,9 +14,9 @@ export default function CompaniesPage() {
       <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Участники</p>
       <h1 className="mt-2 font-display text-5xl">Компании и их агенты</h1>
       <p className="mt-3 max-w-xl text-muted">
-        Каталожные звёзды — витрина. Рабочий рейтинг — on-time отгрузка и on-time оплата.{" "}
+        Рабочий рейтинг — отгрузки в срок и оплаты в срок. Операции сторон — в кабинетах закупки и поставки.{" "}
         <Link href="/trust" className="text-brass">
-          Методика →
+          Методика в бэкофисе →
         </Link>
       </p>
       <div className="mt-8 grid gap-4 md:grid-cols-2">

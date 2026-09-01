@@ -262,6 +262,28 @@ export interface TickerEvent {
   tone: "deal" | "rfq" | "agent";
 }
 
+export type AuditActor =
+  | "orchestrator"
+  | "parser"
+  | "matcher"
+  | "buyer-agent"
+  | "seller-agent"
+  | "mandate"
+  | "fulfillment"
+  | "ops"
+  | "human"
+  | "platform";
+
+export interface AuditEvent {
+  id: string;
+  at: string;
+  actor: AuditActor;
+  action: string;
+  detail: string;
+  constraint?: string;
+  ref?: string;
+}
+
 export interface MarketplaceState {
   currentCompanyId: string;
   llmModel: string;
@@ -270,4 +292,7 @@ export interface MarketplaceState {
   orders: Order[];
   lots: Lot[];
   reputations: Record<string, TrustScore>;
+  auditLog: AuditEvent[];
+  lastBuyerId: string;
+  lastSellerId: string;
 }

@@ -55,7 +55,7 @@ export function when(iso: string): string {
 export function dealStatusLabel(status: string): string {
   switch (status) {
     case "open":
-      return "RFQ отправлен";
+      return "Запрос отправлен";
     case "countering":
       return "Переговоры";
     case "agreed":
@@ -107,4 +107,21 @@ export function rfqStatusLabel(status: string): string {
     default:
       return status;
   }
+}
+
+export function incotermLabel(code: string): string {
+  switch (code) {
+    case "FCA":
+      return "самовывоз";
+    case "DAP":
+      return "доставка до покупателя";
+    case "CPT":
+      return "перевозка оплачена";
+    default:
+      return code;
+  }
+}
+
+export function deliveryLine(code: string, place: string): string {
+  return `${incotermLabel(code)}, ${place}`;
 }

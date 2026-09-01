@@ -7,7 +7,7 @@ import { Pipeline } from "@/components/pipeline";
 import { IncidentsPanel } from "@/components/incidents";
 import { Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
-import { compactRub, days, num, orderStatusLabel, qty, rub, when } from "@/lib/format";
+import { compactRub, days, deliveryLine, num, orderStatusLabel, qty, rub, when } from "@/lib/format";
 import { packLabel } from "@/lib/packing";
 import { useStore } from "@/lib/store";
 import { trustOf } from "@/lib/trust";
@@ -102,7 +102,7 @@ function Room({
         </div>
         <h1 className="mt-4 font-display text-4xl leading-tight">{product.name}</h1>
         <p className="mt-2 text-muted">
-          {packLabel(order.qty, product)} · {order.incoterm} {order.destination} · {compactRub(order.total)}
+          {packLabel(order.qty, product)} · {deliveryLine(order.incoterm, order.destination)} · {compactRub(order.total)}
         </p>
         <div className="mt-6">
           <Pipeline status={playing && order.status === "in_transit" ? "shipping" : order.status} />
@@ -135,7 +135,7 @@ function Room({
             onClick={() => onAccept(order.id)}
             className="mt-8 rounded-full bg-brass px-5 py-2.5 text-[13px] font-medium text-bg"
           >
-            Подписать приёмку на воротах
+            Подписать приёмку
           </button>
         )}
         {party && !playing && order.status === "remainder_due" && (
@@ -203,7 +203,7 @@ function Room({
               {order.shipments[0].from} → {order.shipments[0].to}
             </p>
             <p className="mt-1 font-mono text-[11px] text-muted">
-              {order.shipments[0].carrier} · {order.shipments[0].vehicle} · ETA {days(order.shipments[0].etaDays)}
+              {order.shipments[0].carrier} · {order.shipments[0].vehicle} · прибытие {days(order.shipments[0].etaDays)}
             </p>
           </div>
         )}

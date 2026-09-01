@@ -39,7 +39,7 @@ function RfqComposer({ preset }: { preset: string }) {
       return;
     }
     if (company.role === "seller") {
-      setError("Сейчас вы в роли поставщика. Переключитесь на закупщика в шапке — например, «Кофейня Холдинг».");
+      setError("Заявка создаётся в кабинете закупщика. Перейдите в «Закупки» — организация сменится автоматически.");
       return;
     }
     setError(null);
@@ -65,12 +65,22 @@ function RfqComposer({ preset }: { preset: string }) {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-12">
-      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Агент закупки</p>
+      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Закупки · новая заявка</p>
       <h1 className="mt-2 font-display text-5xl leading-tight">Опишите, что нужно купить</h1>
+      {company.role === "seller" ? (
+        <p className="mt-4 border border-brass/40 bg-surface px-4 py-3 text-[14px] text-muted">
+          Сейчас открыта организация-поставщик. Заявка живёт в кабинете закупщика —{" "}
+          <Link href="/buy" className="text-brass">
+            перейти в закупки
+          </Link>
+          .
+        </p>
+      ) : (
       <p className="mt-3 text-muted">
         Агент «{company.agent.name}» ({company.short}) разберёт запрос через {llmModel}, найдёт партии и откроет
         комнаты. Цифры считает движок мандата, формулировки — модель.
       </p>
+      )}
 
       <textarea
         value={query}
@@ -116,7 +126,7 @@ function RfqComposer({ preset }: { preset: string }) {
         <ol className="mt-10 space-y-2 font-mono text-[12px] text-muted">
           <Step n="01" active label="Разбор потребности" />
           <Step n="02" active={phase === "match" || phase === "talk" || phase === "done"} label="Подбор поставщиков" />
-          <Step n="03" active={phase === "talk" || phase === "done"} label="Рассылка RFQ и торг" />
+          <Step n="03" active={phase === "talk" || phase === "done"} label="Рассылка запросов и торг" />
           <Step n="04" active={phase === "done"} label="Сводка по комнатам" />
         </ol>
       )}
@@ -141,7 +151,7 @@ function RfqComposer({ preset }: { preset: string }) {
               </p>
               <p className="mt-2 text-[14px] text-muted">
                 {qty(best.qty, productById(best.productId).unit)} × {rub(best.currentPrice)} ={" "}
-                {compactRub(best.currentPrice * best.qty)} · {days(best.leadDays)} · счёт {best.score}/100
+                {compactRub(best.currentPrice * best.qty)} · {days(best.leadDays)} · оценка {best.score}/100
               </p>
               <Link href={`/deals/${best.id}`} className="mt-4 inline-block text-[13px] text-brass-2">
                 Открыть комнату и утвердить →
@@ -207,7 +217,7 @@ function DealRow({ deal }: { deal: Deal }) {
         >
           {dealStatusLabel(deal.status)}
         </Badge>
-        <span className="font-mono text-[11px] text-muted">счёт {deal.score}</span>
+        <span className="font-mono text-[11px] text-muted">оценка {deal.score}</span>
       </div>
       <p className="mt-2 font-display text-xl">{seller.short}</p>
       <p className="text-[13px] text-muted">{product.name}</p>

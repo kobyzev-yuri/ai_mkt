@@ -36,7 +36,7 @@ export function proposeRemedy(kind: IncidentKind, delayDays = 2, orderTotal = 0)
         kind: "price_cut",
         amount,
         extraDays: delayDays,
-        text: `Компенсация ${pct}% за срыв отгрузки (как Trade Assurance): ${amount} ₽ кредитом в счёт остатка. Срок +${delayDays} дн.`,
+        text: `Компенсация ${pct}% за срыв отгрузки: ${amount} ₽ зачётом в счёт остатка. Срок +${delayDays} дн.`,
       };
     }
     case "delay_pay": {
@@ -51,7 +51,7 @@ export function proposeRemedy(kind: IncidentKind, delayDays = 2, orderTotal = 0)
     case "shortage":
       return {
         kind: "credit_note",
-        text: "Кредит-нота на недостачу + довоз из соседней партии. Акт расхождения на воротах.",
+        text: "Зачёт на недостачу + довоз из соседней партии. Акт расхождения при приёмке.",
       };
     case "quality":
       return {
@@ -62,7 +62,7 @@ export function proposeRemedy(kind: IncidentKind, delayDays = 2, orderTotal = 0)
       return {
         kind: "reissue_docs",
         extraDays: 1,
-        text: "Перевыпуск УПД/ТТН за 1 день. Без закрывающих ФНС не примет вычет — это не «мелочь».",
+        text: "Перевыпуск накладной и УПД за 1 день. Без закрывающих сделка не закрывается — это не мелочь.",
       };
     case "stock_miss":
       return {
@@ -74,7 +74,7 @@ export function proposeRemedy(kind: IncidentKind, delayDays = 2, orderTotal = 0)
       return {
         kind: "extend_sla",
         extraDays: 5,
-        text: "Форс-мажор: сдвигаем SLA, рейтинг не трогаем, если есть справка. Иначе — как срыв срока.",
+        text: "Форс-мажор: сдвигаем срок поставки, рейтинг не трогаем, если есть справка. Иначе — как срыв срока.",
       };
   }
 }
@@ -120,9 +120,9 @@ export const SELLER_INCIDENT_KINDS: IncidentKind[] = ["delay_pay", "force_majeur
 export const INCIDENT_LABEL: Record<IncidentKind, string> = {
   delay_ship: "Срыв отгрузки",
   delay_pay: "Просрочка оплаты",
-  shortage: "Недостача на воротах",
+  shortage: "Недостача при приёмке",
   quality: "Качество / спецификация",
-  docs: "УПД / ТТН / паспорт",
+  docs: "Накладная / УПД / паспорт",
   stock_miss: "Лот не подтвердился",
   force_majeure: "Форс-мажор",
 };

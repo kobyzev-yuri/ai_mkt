@@ -1,11 +1,11 @@
-import { days, num, rub } from "./format";
+import { days, deliveryLine, num, rub } from "./format";
 import { isoOffset, uid } from "./ids";
 import { allocateLots, freeQty, lotsForProduct } from "./inventory";
 import { packCount, packLabel, packingOf, snapToPack } from "./packing";
 import { parseNeed } from "./parse-need";
 import { trustOf } from "./trust";
 import { companies, lots as seedLots, products } from "./seed";
-import type { Company, Deal, Message, Need, Offer, Product, Rfq } from "./types";
+import type { Company, Deal, Message, Need, Offer, Product, Rfq, TrustScore } from "./types";
 
 export { parseNeed };
 
@@ -33,7 +33,10 @@ export function productById(id: string): Product {
   return p;
 }
 
-export function matchProducts(need: Need): { product: Product; score: number; reasons: string[] }[] {
+export function matchProducts(
+  need: Need,
+  reputations?: Record<string, TrustScore>,
+): { product: Product; score: number; reasons: string[] }[] {
   const keys = [...need.keywords, ...(need.query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 3))];
   const unique = Array.from(new Set(keys));
 
@@ -90,13 +93,13 @@ export function matchProducts(need: Need): { product: Product; score: number; re
       reasons.push(`Кратность ${pack.packSize} ${product.unit} (${pack.packUnit})`);
 
       score += Math.round((seller.rating - 4) * 8);
-      const ship = trustOf(seller.id).onTimeShipPct;
+      const ship = trustOf(seller.id, reputations).onTimeShipPct;
       if (ship >= 95) {
         score += 8;
-        reasons.push(`On-time отгрузка ${ship}%`);
+        reasons.push(`Отгрузки в срок: ${ship}%`);
       } else if (ship < 90) {
         score -= 10;
-        reasons.push(`Риск срыва срока: on-time ${ship}%`);
+        reasons.push(`Риск срыва срока: отгрузки в срок ${ship}%`);
       }
       if (reasons.length === 0) reasons.push("Частичное совпадение");
 
@@ -116,11 +119,16 @@ function askPrice(product: Product, qty: number): number {
   return roundPrice(product.price * (tight ? 1.06 : 1));
 }
 
-export function createRfq(buyerId: string, query: string, parsed?: Need): { rfq: Rfq; deals: Deal[] } {
+export function createRfq(
+  buyerId: string,
+  query: string,
+  parsed?: Need,
+  reputations?: Record<string, TrustScore>,
+): { rfq: Rfq; deals: Deal[] } {
   const need = parsed ?? parseNeed(query);
   const buyer = companyById(buyerId);
   const now = new Date();
-  const matches = matchProducts(need).slice(0, 3);
+  const matches = matchProducts(need, reputations).slice(0, 3);
   const rfqId = uid("rfq");
   const rawQty = need.qty ?? Math.max(matches[0]?.product.moq ?? 1, Math.round((matches[0]?.product.moq ?? 1) * 8));
   const qty = matches[0] ? snapToPack(rawQty, matches[0].product) : rawQty;
@@ -142,6 +150,7 @@ export function createRfq(buyerId: string, query: string, parsed?: Need): { rfq:
       matchReasons: m.reasons,
       stagger: i * 400,
       now,
+      reputations,
     }),
   );
 
@@ -164,8 +173,9 @@ function negotiate(opts: {
   matchReasons: string[];
   stagger: number;
   now: Date;
+  reputations?: Record<string, TrustScore>;
 }): Deal {
-  const { rfq, buyer, product, qty, matchReasons, now } = opts;
+  const { rfq, buyer, product, qty, matchReasons, now, reputations } = opts;
   const seller = companyById(product.sellerId);
   const list = product.price;
   const floor = floorPrice(product, seller, qty);
@@ -173,7 +183,7 @@ function negotiate(opts: {
   const budgetCap = rfq.need.budget ? rfq.need.budget / qty : list * 0.98;
   const buyerTarget = rfq.need.budget ? Math.min(budgetCap * 0.92, ask * 0.9) : ask * 0.88;
   const counter = roundPrice(Math.max(buyerTarget, floor * 0.97));
-  const payScore = trustOf(buyer.id).onTimePayPct;
+  const payScore = trustOf(buyer.id, reputations).onTimePayPct;
   const riskPay = payScore < 85;
   const openingPrepay = riskPay ? 60 : 50;
   const wantPrepay = riskPay
@@ -215,15 +225,15 @@ function negotiate(opts: {
 
   push(
     "system",
-    `Агент «${buyer.agent.name}» направил RFQ поставщику ${seller.short}. Мандат покупателя: ${buyer.agent.mandate}`,
+    `Агент «${buyer.agent.name}» направил запрос поставщику ${seller.short}. Мандат покупателя: ${buyer.agent.mandate}`,
     1,
   );
 
   push(
     "seller-agent",
     `Агент «${seller.agent.name}»: по «${product.name}» собираем ${packLabel(qty, product)}. Партии: ${lotLine}. Предложение: ${rub(ask)}/${product.unit}, отгрузка ${days(leadDays)}, предоплата ${openingPrepay}%${
-      riskPay ? ` (on-time оплаты покупателя ${payScore}% — поднимаем аванс)` : ""
-    }, ${incoterm} ${incoterm === "DAP" ? destination : seller.city}.`,
+      riskPay ? ` (оплаты покупателя в срок ${payScore}% — поднимаем аванс)` : ""
+    }, ${deliveryLine(incoterm, incoterm === "DAP" ? destination : seller.city)}.`,
     seller.agent.responseMin,
   );
   offers.push({
@@ -233,7 +243,7 @@ function negotiate(opts: {
     qty,
     leadDays,
     prepayPct: openingPrepay,
-    terms: `${incoterm} ${incoterm === "DAP" ? destination : seller.city}`,
+    terms: deliveryLine(incoterm, incoterm === "DAP" ? destination : seller.city),
     at: isoOffset(now, t),
   });
 
@@ -241,9 +251,9 @@ function negotiate(opts: {
     "buyer-agent",
     `Агент «${buyer.agent.name}»: ${
       rfq.need.budget ? `бюджет заявки ${rub(rfq.need.budget)}.` : "идём от рынка."
-    } Контр: ${rub(counter)}/${product.unit}, предоплата ${wantPrepay}%${
+    } Встречное: ${rub(counter)}/${product.unit}, предоплата ${wantPrepay}%${
       rfq.need.city ? `, поставка в ${rfq.need.city}` : ""
-    }. ${buyer.agent.priority === "speed" ? "Срок критичен — готов закрыть быстрее дороже." : "Есть конкурирующие RFQ, цена решающая."}`,
+    }. ${buyer.agent.priority === "speed" ? "Срок критичен — готов закрыть быстрее дороже." : "Есть конкурирующие заявки, цена решающая."}`,
     buyer.agent.responseMin,
   );
   offers.push({
@@ -253,7 +263,7 @@ function negotiate(opts: {
     qty,
     leadDays,
     prepayPct: wantPrepay,
-    terms: rfq.need.city ? `поставка ${rfq.need.city}` : "FCA",
+    terms: rfq.need.city ? `поставка ${rfq.need.city}` : "самовывоз",
     at: isoOffset(now, t),
   });
 
@@ -288,7 +298,7 @@ function negotiate(opts: {
       qty,
       leadDays: finalLead,
       prepayPct: prepay,
-      terms: rfq.need.city ? `доставка ${rfq.need.city}` : `FCA ${seller.city}`,
+      terms: rfq.need.city ? `доставка ${rfq.need.city}` : deliveryLine("FCA", seller.city),
       at: isoOffset(now, t),
     });
 
@@ -331,7 +341,7 @@ function negotiate(opts: {
       qty,
       leadDays: finalLead,
       prepayPct: 50,
-      terms: `FCA ${seller.city}`,
+      terms: deliveryLine("FCA", seller.city),
       at: isoOffset(now, t),
     });
 

@@ -9,19 +9,26 @@ import { useStore } from "@/lib/store";
 export default function DealsPage() {
   const { deals, company } = useStore();
   const mine = deals.filter((d) => d.buyerId === company.id || d.sellerId === company.id);
-  const list = mine.length ? mine : deals;
+  const list = mine;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-12">
-      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Комнаты</p>
-      <h1 className="mt-2 font-display text-5xl">Сделки агентов</h1>
+      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">
+        {company.role === "seller" ? "Поставки" : "Закупки"} · комнаты
+      </p>
+      <h1 className="mt-2 font-display text-5xl">
+        {company.role === "seller" ? "Сделки с закупщиками" : "Сделки с поставщиками"}
+      </h1>
       <p className="mt-3 max-w-xl text-muted">
         {mine.length
-          ? `Показаны комнаты, где участвует ${company.short}.`
-          : "У текущей компании пока нет комнат — показан общий поток площадки."}
+          ? `Только контрагенты «${company.short}», не общий поток площадки.`
+          : "У этой организации пока нет комнат с контрагентами."}
       </p>
       <div className="mt-8 divide-y divide-line border border-line">
-        {list.map((d) => {
+        {list.length === 0 ? (
+          <p className="bg-surface px-4 py-8 text-[14px] text-muted">Комнат нет. Откройте кабинет и запустите заявку.</p>
+        ) : (
+        list.map((d) => {
           const p = productById(d.productId);
           const seller = companyById(d.sellerId);
           const buyer = companyById(d.buyerId);
@@ -50,7 +57,8 @@ export default function DealsPage() {
               <p className="font-mono text-[13px] text-brass">{compactRub(d.currentPrice * d.qty)}</p>
             </Link>
           );
-        })}
+        })
+        )}
       </div>
     </div>
   );

@@ -179,10 +179,10 @@ export function applyAdvancePayment(order: Order): Order {
     status: "loaded",
   };
   push("ship", `Отгрузка. ${ttn}, ${shipment.vehicle}, ${shipment.from} → ${shipment.to}. УПД сформирован.`);
-  push("transit", `Груз в пути, ETA ${days(shipment.etaDays)}. Агент логистики отслеживает ТТН.`);
+  push("transit", `Груз в пути, прибытие через ${days(shipment.etaDays)}. Агент логистики отслеживает накладную.`);
   push(
     "accept",
-    `Прибытие на ворота ${buyer.short} (${order.destination}). Нужна приёмка по количеству и сертификатам партий.`,
+    `Прибытие на склад ${buyer.short} (${order.destination}). Нужна приёмка по количеству и сертификатам партий.`,
   );
 
   const documents: TradeDocument[] = [

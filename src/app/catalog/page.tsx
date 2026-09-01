@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ProductCard } from "@/components/product-card";
 import { Badge } from "@/components/ui";
 import { freeQty } from "@/lib/inventory";
-import { days, num, rub } from "@/lib/format";
+import { days, incotermLabel, num, rub } from "@/lib/format";
 import { packingOf } from "@/lib/packing";
 import { CATEGORIES, companies, products } from "@/lib/seed";
 import { useStore } from "@/lib/store";
@@ -127,7 +127,7 @@ export default function CatalogPage() {
                   </div>
                   <p className="mt-2 font-display text-xl">{product.name}</p>
                   <p className="text-[13px] text-muted">
-                    {lot.warehouse} · {seller?.short} · {lot.incoterm}
+                    {lot.warehouse} · {seller?.short} · {incotermLabel(lot.incoterm)}
                   </p>
                 </div>
                 <div className="text-left sm:text-right">

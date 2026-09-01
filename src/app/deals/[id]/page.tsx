@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AgentMark, Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
-import { compactRub, days, dealStatusLabel, qty, rub, when } from "@/lib/format";
+import { compactRub, days, dealStatusLabel, deliveryLine, qty, rub, when } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Actor, Deal } from "@/lib/types";
 
@@ -142,7 +142,7 @@ function Room({
         )}
         {deal.status === "rejected" && !playing && (
           <p className="mt-8 border border-terra/30 bg-surface px-4 py-3 text-[14px] text-terra">
-            Мандаты не пересеклись — или человек отклонил. Агент может открыть RFQ другому поставщику.
+            Мандаты не пересеклись — или человек отклонил. Агент может открыть заявку другому поставщику.
           </p>
         )}
       </section>
@@ -166,7 +166,7 @@ function Room({
             <Pair k="Сумма" v={compactRub(deal.currentPrice * deal.qty)} />
             <Pair k="Срок" v={days(deal.leadDays)} />
             <Pair k="Предоплата" v={`${deal.prepayPct}%`} />
-            <Pair k="Поставка" v={`${deal.incoterm} ${deal.destination}`} />
+            <Pair k="Поставка" v={deliveryLine(deal.incoterm, deal.destination)} />
             <Pair k="Места" v={`${deal.packCount}`} />
           </dl>
         </div>
@@ -182,13 +182,13 @@ function Room({
         </div>
 
         <div className="border border-line bg-surface p-5">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Почему этот матч</p>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Почему этот подбор</p>
           <ul className="mt-3 space-y-1 text-[13px] text-muted">
             {deal.matchReasons.map((r) => (
               <li key={r}>· {r}</li>
             ))}
           </ul>
-          <p className="mt-4 font-mono text-[11px] text-brass">счёт агента {deal.score}/100</p>
+          <p className="mt-4 font-mono text-[11px] text-brass">оценка агента {deal.score}/100</p>
           <Link href={`/catalog/${product.id}`} className="mt-3 inline-block text-[13px] text-paper underline-offset-4 hover:underline">
             Карточка позиции
           </Link>

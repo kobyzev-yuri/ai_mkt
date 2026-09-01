@@ -39,10 +39,10 @@ export default function CompanyPage() {
       </p>
 
       <div className="mt-8 grid gap-px border border-line bg-line sm:grid-cols-4">
-        <Stat label="On-time отгрузка" value={`${trust.onTimeShipPct}%`} hint="как SOPI у продавца" />
-        <Stat label="On-time оплата" value={`${trust.onTimePayPct}%`} hint="ниже 85% — аванс выше" />
-        <Stat label="Претензии" value={`${trust.claimRatePct}%`} hint="ворота / спецификация" />
-        <Stat label="Abnormal fulfill" value={`${trust.abnormalFulfillPct}%`} hint="срывы без закрытия" />
+        <Stat label="Отгрузки в срок" value={`${trust.onTimeShipPct}%`} hint="доля поставок без срыва" />
+        <Stat label="Оплаты в срок" value={`${trust.onTimePayPct}%`} hint="ниже 85% — аванс выше" />
+        <Stat label="Претензии" value={`${trust.claimRatePct}%`} hint="приёмка / спецификация" />
+        <Stat label="Срывы без закрытия" value={`${trust.abnormalFulfillPct}%`} hint="не закрытые в срок поставки" />
       </div>
 
       <div className="mt-8 border border-line bg-surface p-5">

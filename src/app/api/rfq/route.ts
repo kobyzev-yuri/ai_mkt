@@ -3,11 +3,17 @@ import { createRfq } from "@/lib/agents";
 import { enrichNeed, voiceDeals } from "@/lib/llm-agents";
 import { allowedModel, DEFAULT_MODEL } from "@/lib/ollama";
 import { companies } from "@/lib/seed";
+import type { TrustScore } from "@/lib/types";
 
 export const maxDuration = 120;
 
 export async function POST(req: Request) {
-  const body = (await req.json()) as { query?: string; buyerId?: string; model?: string };
+  const body = (await req.json()) as {
+    query?: string;
+    buyerId?: string;
+    model?: string;
+    reputations?: Record<string, TrustScore>;
+  };
   const query = body.query?.trim() ?? "";
   const buyer = companies.find((c) => c.id === body.buyerId);
   if (query.length < 3) {
@@ -18,7 +24,7 @@ export async function POST(req: Request) {
   }
   const model = allowedModel(body.model ?? DEFAULT_MODEL);
   const need = await enrichNeed(query, model);
-  const { rfq, deals } = createRfq(buyer.id, query, need);
+  const { rfq, deals } = createRfq(buyer.id, query, need, body.reputations);
   const voiced = await voiceDeals(deals, model);
   const llm = voiced.some((d) => d.voicedBy);
   return NextResponse.json({ rfq, deals: voiced, model, llm, need });
