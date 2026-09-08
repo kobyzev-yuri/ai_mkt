@@ -8,7 +8,7 @@ B2B-площадка как **среда координации ИИ-агент�
 |---|---|
 | Концепция среды координации | [`docs/CONCEPT.md`](docs/CONCEPT.md), экран [`/concept`](http://127.0.0.1:3000/concept) |
 | Бизнес-потребность пользователей | концепция, § «Кому это нужно» |
-| Архитектура и модель взаимодействия | концепция + [`docs/BUSINESS.md`](docs/BUSINESS.md) |
+| Архитектура и модель взаимодействия | концепция + [`docs/BUSINESS.md`](docs/BUSINESS.md) + схема [`/office/flow`](http://127.0.0.1:3000/office/flow) · Langflow [`langflow/`](langflow/) |
 | Рабочий прототип | все экраны ниже |
 | Демо автоматизации продавец ↔ покупатель | [`/demo`](http://127.0.0.1:3000/demo) |
 | Безопасность, доверие, контроль, оценка агентов | [`/trust`](http://127.0.0.1:3000/trust) |
@@ -22,7 +22,17 @@ npm install
 npx next dev --port 3000 --hostname 127.0.0.1
 ```
 
-Откройте [http://127.0.0.1:3000](http://127.0.0.1:3000). Для жюри достаточно `/demo` — прогон не требует Ollama. В шапке можно сменить компанию и модель. Состояние пишется в `localStorage` (`atrium-marketplace-v4`).
+Откройте [http://127.0.0.1:3000](http://127.0.0.1:3000). Схема взаимодействия агентов — [`/office/flow`](http://127.0.0.1:3000/office/flow). Для жюри достаточно `/demo` — прогон не требует Ollama. В шапке можно сменить компанию и модель. Состояние пишется в `localStorage` (`atrium-marketplace-v4`).
+
+## Схема агентов (Langflow)
+
+Кабинеты и движок мира остаются в Next.js. Граф ролей — экран `/office/flow` и каталог [`langflow/`](langflow/): те же узлы собираются в Langflow.
+
+```bash
+python langflow/run_bus.py
+pip install langflow
+LANGFLOW_COMPONENTS_PATH=$PWD/langflow/components langflow run
+```
 
 ## Контур одной фразой
 

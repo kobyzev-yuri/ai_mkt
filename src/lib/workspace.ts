@@ -31,6 +31,7 @@ export const SUBNAV: Record<WorkspaceId, { href: string; label: string }[]> = {
   ],
   office: [
     { href: "/office", label: "Обзор" },
+    { href: "/office/flow", label: "Схема агентов" },
     { href: "/concept", label: "Идеология" },
     { href: "/demo", label: "Демо" },
     { href: "/trust", label: "Аналитика" },

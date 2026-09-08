@@ -8,6 +8,12 @@ import { useStore } from "@/lib/store";
 
 const PILLARS = [
   {
+    href: "/office/flow",
+    kicker: "Langflow",
+    title: "Схема агентов",
+    text: "Граф ролей и действий S1–S3. Кто публикует заявку, кто считает пол, кто подписывает.",
+  },
+  {
     href: "/concept",
     kicker: "Идеология",
     title: "Среда, не каталог с ботом",
@@ -42,7 +48,7 @@ export default function OfficePage() {
         отдельные кабинеты организаций. С контрагентами работают они, не этот контур.
       </p>
 
-      <div className="mt-10 grid gap-4 md:grid-cols-3">
+      <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {PILLARS.map((p) => (
           <Link key={p.href} href={p.href} className="border border-line bg-surface p-5 hover:border-brass/40">
             <p className="font-mono text-[10px] uppercase tracking-widest text-brass">{p.kicker}</p>

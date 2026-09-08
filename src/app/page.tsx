@@ -121,6 +121,10 @@ export default function HomePage() {
           <Link href="/office" className="text-brass">
             Бэкофис →
           </Link>
+          {" · "}
+          <Link href="/office/flow" className="text-brass">
+            Схема агентов →
+          </Link>
         </p>
       </section>
 

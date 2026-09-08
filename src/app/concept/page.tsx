@@ -15,7 +15,10 @@ export default function ConceptPage() {
         мандаты, документы, сроки поставки. Человек задаёт политику и подписывает деньги и товар. Агенты делают остальное.
       </p>
       <div className="mt-8 flex flex-wrap gap-3">
-        <Link href="/demo" className="rounded-full bg-brass px-6 py-3 text-[14px] font-medium text-bg hover:bg-brass-2">
+        <Link href="/office/flow" className="rounded-full bg-brass px-6 py-3 text-[14px] font-medium text-bg hover:bg-brass-2">
+          Схема агентов
+        </Link>
+        <Link href="/demo" className="rounded-full border border-line px-6 py-3 text-[14px] text-paper hover:border-brass/50">
           Смотреть прогон сделки
         </Link>
         <Link href="/trust" className="rounded-full border border-line px-6 py-3 text-[14px] text-paper hover:border-brass/50">
@@ -168,8 +171,11 @@ export default function ConceptPage() {
           <li>Претензия без документов в заказе не защищена.</li>
         </ul>
         <p className="mt-6 text-[13px] text-muted">
-          Полный текст: <span className="font-mono text-paper">docs/CONCEPT.md</span> и процессы в{" "}
-          <span className="font-mono text-paper">docs/BUSINESS.md</span>.
+          Полный текст: <span className="font-mono text-paper">docs/CONCEPT.md</span> и схема агентов на{" "}
+          <Link href="/office/flow" className="text-brass">
+            /office/flow
+          </Link>
+          .
         </p>
       </section>
     </div>
