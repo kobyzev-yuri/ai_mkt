@@ -70,7 +70,7 @@ export const AGENT_ROLES: AgentRole[] = [
     id: "human",
     name: "Человек",
     lane: "gate",
-    job: "Утвердить, оплатить, принять, эскалировать.",
+    job: "Подтвердить разбор, утвердить сделку, оплатить, принять, эскалировать.",
   },
   {
     id: "platform",
@@ -88,7 +88,7 @@ export interface ScenarioStep {
 }
 
 export interface Scenario {
-  id: "S1" | "S2" | "S3";
+  id: "S0" | "S1" | "S2" | "S3";
   name: string;
   blurb: string;
   steps: ScenarioStep[];
@@ -96,11 +96,22 @@ export interface Scenario {
 
 export const SCENARIOS: Scenario[] = [
   {
+    id: "S0",
+    name: "Витрина",
+    blurb: "Поставщик выгружает остатки из 1С. Поиск потом видит свободный qty, не прайс-лист.",
+    steps: [
+      { id: "export", title: "Выгрузка остатков из 1С", roles: ["seller-agent"] },
+      { id: "map", title: "Маппинг SKU, пола и кратности", roles: ["mandate"] },
+      { id: "publish", title: "Партии на витрине", roles: ["matcher"] },
+    ],
+  },
+  {
     id: "S1",
     name: "Закупка партии",
-    blurb: "От фразы закупщика до согласованных условий в мандате. Три поставщика отвечают параллельно.",
+    blurb: "От фразы закупщика до согласованных условий в мандате. Ищет по уже выложенным партиям.",
     steps: [
       { id: "parse", title: "Разбор потребности", roles: ["parser", "orchestrator"] },
+      { id: "insure", title: "Страховка разбора", roles: ["human"], human: true },
       { id: "match", title: "Подбор свободных партий", roles: ["matcher", "mandate"] },
       { id: "talk", title: "Запрос и торг", roles: ["buyer-agent", "seller-agent", "mandate"] },
       { id: "gate", title: "Утверждение сделки", roles: ["human"], human: true },
@@ -130,6 +141,7 @@ export const SCENARIOS: Scenario[] = [
 ];
 
 export const SPEECH_ACTS = [
+  { act: "Публикация партий", from: "поставщик / адаптер 1С", meaning: "свободный остаток, пол, склад — без этого поиск пустой" },
   { act: "Заявка", from: "агент закупки", meaning: "запрос объёма, срока, города, бюджета" },
   { act: "Предложение", from: "агент поставки", meaning: "цена, предоплата, партии, самовывоз или доставка" },
   { act: "Встречное", from: "агент закупки", meaning: "ответ в пределах мандата" },

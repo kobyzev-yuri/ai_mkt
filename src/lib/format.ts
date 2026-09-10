@@ -89,6 +89,8 @@ export function orderStatusLabel(status: string): string {
       return "Ждёт остаток";
     case "settled":
       return "Закрыт";
+    case "cancelled":
+      return "Сорвана · лоты на витрине";
     default:
       return status;
   }

@@ -1,6 +1,6 @@
 import { AGENT_ROLES, type AgentRoleId } from "./scenarios";
 
-export type FlowScenario = "S1" | "S2" | "S3";
+export type FlowScenario = "S0" | "S1" | "S2" | "S3";
 export type FlowLane = "input" | "platform" | "party" | "engine" | "gate";
 
 export interface FlowNode {
@@ -31,7 +31,15 @@ export const FLOW_NODES: FlowNode[] = [
     lane: "input",
     job: "Свободный текст закупщика. Вход в граф, не агент.",
     x: 24,
-    y: 220,
+    y: 168,
+  },
+  {
+    id: "lots",
+    label: "Партии 1С",
+    lane: "input",
+    job: "Выгрузка остатков поставщика. Адаптер, не агент: на витрину только партии с полом и SKU.",
+    x: 24,
+    y: 360,
   },
   {
     id: "orchestrator",
@@ -126,10 +134,13 @@ export const FLOW_NODES: FlowNode[] = [
 ];
 
 export const FLOW_EDGES: FlowEdge[] = [
+  { id: "e-lots-seller", from: "lots", to: "seller-agent", act: "пол · свободный qty", scenarios: ["S0"] },
+  { id: "e-lots-match", from: "lots", to: "matcher", act: "витрина", scenarios: ["S0", "S1"] },
   { id: "e-need-orch", from: "need", to: "orchestrator", act: "сценарий", scenarios: ["S1"] },
   { id: "e-need-parse", from: "need", to: "parser", act: "текст", scenarios: ["S1"] },
   { id: "e-orch-parse", from: "orchestrator", to: "parser", act: "задача: разбор", scenarios: ["S1"] },
-  { id: "e-parse-match", from: "parser", to: "matcher", act: "структура заявки", scenarios: ["S1"] },
+  { id: "e-parse-human", from: "parser", to: "human", act: "страховка разбора", scenarios: ["S1"] },
+  { id: "e-human-match", from: "human", to: "matcher", act: "полка подтверждена", scenarios: ["S1"] },
   { id: "e-match-buyer", from: "matcher", to: "buyer-agent", act: "партии в мандате", scenarios: ["S1"] },
   { id: "e-match-seller", from: "matcher", to: "seller-agent", act: "свободные лоты", scenarios: ["S1"] },
   { id: "e-buyer-seller", from: "buyer-agent", to: "seller-agent", act: "Заявка", scenarios: ["S1"] },

@@ -32,22 +32,30 @@ export function IncidentsPanel({
 }) {
   const isBuyer = companyId === order.buyerId;
   const isSeller = companyId === order.sellerId;
-  const kinds = isBuyer ? BUYER_INCIDENT_KINDS : isSeller ? SELLER_INCIDENT_KINDS : [];
+  const closed = order.status === "settled" || order.status === "cancelled";
+  const kinds = closed ? [] : isBuyer ? BUYER_INCIDENT_KINDS : isSeller ? SELLER_INCIDENT_KINDS : [];
   const openKinds = new Set(
     (order.incidents ?? []).filter((i) => i.status !== "resolved").map((i) => i.kind),
   );
   const list = order.incidents ?? [];
 
+  if (closed && list.length === 0) return null;
+
   return (
-    <div className="border border-terra/40 bg-surface p-5">
-      <p className="font-mono text-[10px] uppercase tracking-widest text-terra">Инцидент / обход</p>
+    <div className={`border bg-surface p-5 ${closed ? "border-line" : "border-terra/40"}`}>
+      <p className={`font-mono text-[10px] uppercase tracking-widest ${closed ? "text-muted" : "text-terra"}`}>
+        {closed ? "Архив претензий" : "Инцидент / обход"}
+      </p>
       <p className="mt-2 text-[13px] leading-relaxed text-muted">
-        Сначала агенты предлагают компенсацию. Рейтинг бьём только если стороны не сошлись и площадка
-        решает по документам в заказе.
+        {closed
+          ? "Контур закрыт. Новую претензию к этому заказу открыть нельзя."
+          : "Сначала агенты предлагают компенсацию. Рейтинг бьём только если стороны не сошлись и площадка решает по документам в заказе."}
       </p>
 
       {list.length === 0 ? (
-        <p className="mt-4 text-[13px] text-muted">Открытых претензий нет. Если срок, оплата или приёмка сдвинулись — зафиксируйте факт.</p>
+        <p className="mt-4 text-[13px] text-muted">
+          Открытых претензий нет. Если срок, оплата или приёмка сдвинулись — зафиксируйте факт.
+        </p>
       ) : (
         <ul className="mt-4 space-y-4">
           {list.map((inc) => (

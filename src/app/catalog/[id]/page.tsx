@@ -7,11 +7,14 @@ import { days, num, rating, rub } from "@/lib/format";
 import { freeQty } from "@/lib/inventory";
 import { packingOf } from "@/lib/packing";
 import { companies, products } from "@/lib/seed";
+import { useSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
-  const { lots } = useStore();
+  const { account } = useSession();
+  const { lots, company } = useStore();
+  const desk = account?.desk;
   const product = products.find((p) => p.id === id);
   if (!product) {
     return (
@@ -89,12 +92,25 @@ export default function ProductPage() {
           <p className="mt-2 font-mono text-[11px] text-muted">
             Партиями от {num(product.moq)} {product.unit} · {pack.packUnit} {num(pack.packSize)}
           </p>
-          <Link
-            href={`/rfq?q=${encodeURIComponent(`Нужно ${Math.max(product.moq * 10, pack.packSize * 10)} ${product.unit} — ${product.name}, бюджет ориентир ${Math.round(product.price * product.moq * 10 * 0.95)}`)}`}
-            className="mt-6 flex w-full items-center justify-center rounded-full bg-brass py-3 text-[14px] font-medium text-bg hover:bg-brass-2"
-          >
-            Поручить агенту набрать партию
-          </Link>
+          {desk === "buy" ? (
+            <Link
+              href={`/rfq?q=${encodeURIComponent(`Нужно ${Math.max(product.moq * 10, pack.packSize * 10)} ${product.unit} — ${product.name}, бюджет ориентир ${Math.round(product.price * product.moq * 10 * 0.95)}`)}`}
+              className="mt-6 flex w-full items-center justify-center rounded-full bg-brass py-3 text-[14px] font-medium text-bg hover:bg-brass-2"
+            >
+              Поручить агенту набрать партию
+            </Link>
+          ) : desk === "sell" ? (
+            <Link
+              href={seller.id === company.id ? "/sell/catalog" : "/sell"}
+              className="mt-6 flex w-full items-center justify-center rounded-full border border-line py-3 text-[14px] text-paper hover:border-brass/50"
+            >
+              {seller.id === company.id ? "Это ваша витрина" : "Чужая позиция · вы поставщик"}
+            </Link>
+          ) : (
+            <p className="mt-6 border border-dashed border-line px-3 py-3 text-[13px] leading-relaxed text-muted">
+              Заявку с витрины подаёт закупщик, не площадка.
+            </p>
+          )}
           <Link href={`/companies/${seller.id}`} className="mt-8 block border-t border-line pt-5">
             <p className="font-mono text-[10px] uppercase tracking-wider text-muted">Поставщик</p>
             <p className="mt-1 font-display text-2xl">{seller.name}</p>

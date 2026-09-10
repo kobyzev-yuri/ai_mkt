@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AgentBus } from "@/components/agent-bus";
 import { Pipeline } from "@/components/pipeline";
@@ -148,11 +147,12 @@ export default function DemoPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-12">
-      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Бэкофис · прогон S1 → S2 → S3</p>
+      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Демо-прогон · S0 → S3</p>
       <h1 className="mt-2 font-display text-5xl leading-tight">Демо: агенты закрывают закупку</h1>
       <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted">
-        Кофейня Холдинг закупает 50&nbsp;000 крафт-коробок. Агенты ищут партии, торгуются, резервируют склад и закрывают
-        срыв. Человек в этом прогоне подтверждает ключевые шаги — так видно, где автоматизация, а где контроль.
+        Партии уже на витрине (как после выгрузки 1С). Кофейня Холдинг закупает 50&nbsp;000 крафт-коробок. Агенты ищут
+        свободный остаток, торгуются, резервируют склад и закрывают срыв. Человек подтверждает ключевые шаги. Без входа в
+        кабинеты.
       </p>
       <div className="mt-6 flex flex-wrap gap-3">
         <button
@@ -258,9 +258,6 @@ export default function DemoPage() {
                   </li>
                 ))}
               </ul>
-              <Link href={`/orders/${order.id}`} className="mt-4 inline-block text-[13px] text-brass">
-                Открыть заказ →
-              </Link>
             </div>
           )}
         </aside>

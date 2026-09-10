@@ -18,6 +18,7 @@ export function openIncident(
   raisedBy: Incident["raisedBy"],
   delayDays = 2,
 ): Order {
+  if (order.status === "settled" || order.status === "cancelled") return order;
   if ((order.incidents ?? []).some((i) => i.kind === kind && i.status !== "resolved")) return order;
   const incident: Incident = {
     id: uid("inc"),

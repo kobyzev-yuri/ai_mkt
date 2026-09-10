@@ -1,6 +1,7 @@
 export type CompanyRole = "buyer" | "seller" | "both";
 export type AgentTone = "firm" | "flexible" | "premium";
 export type AgentPriority = "price" | "speed" | "quality";
+export type BargainTactic = "market" | "firm" | "fast";
 export type DealStatus = "open" | "countering" | "agreed" | "rejected" | "approved";
 export type RfqStatus = "matching" | "negotiating" | "awarded" | "closed";
 export type Actor = "buyer-agent" | "seller-agent" | "system" | "human";
@@ -9,6 +10,7 @@ export interface AgentProfile {
   name: string;
   mandate: string;
   tone: AgentTone;
+  tactic: BargainTactic;
   priority: AgentPriority;
   minMarginPct: number;
   autoApproveBelow: number;
@@ -40,7 +42,8 @@ export type OrderStatus =
   | "delivered"
   | "acceptance_due"
   | "remainder_due"
-  | "settled";
+  | "settled"
+  | "cancelled";
 export type InvoiceKind = "advance" | "remainder";
 export type InvoiceStatus = "draft" | "issued" | "paid";
 export type DocumentKind = "invoice" | "spec" | "upd" | "ttn" | "cert" | "acceptance";
@@ -150,6 +153,8 @@ export interface Deal {
   score: number;
   playback: boolean;
   matchReasons: string[];
+  buyerTactic?: BargainTactic;
+  sellerTactic?: BargainTactic;
   orderId?: string;
   voicedBy?: string;
 }
@@ -295,4 +300,5 @@ export interface MarketplaceState {
   auditLog: AuditEvent[];
   lastBuyerId: string;
   lastSellerId: string;
+  tactics: Record<string, BargainTactic>;
 }

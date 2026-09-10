@@ -121,3 +121,23 @@ export function allocateLots(
   const leadDays = allocations.length ? Math.max(...allocations.map((a) => a.readyDays)) : 0;
   return { ok: left <= 0, lots: next, allocations, leadDays, shortfall: left };
 }
+
+export function releaseLots(lots: Lot[], allocations: Allocation[]): Lot[] {
+  return lots.map((lot) => {
+    const take = allocations.filter((a) => a.lotId === lot.id).reduce((s, a) => s + a.qty, 0);
+    if (!take) return lot;
+    return { ...lot, reserved: Math.max(0, lot.reserved - take) };
+  });
+}
+
+export function consumeLots(lots: Lot[], allocations: Allocation[]): Lot[] {
+  return lots.map((lot) => {
+    const take = allocations.filter((a) => a.lotId === lot.id).reduce((s, a) => s + a.qty, 0);
+    if (!take) return lot;
+    return {
+      ...lot,
+      qty: Math.max(0, lot.qty - take),
+      reserved: Math.max(0, lot.reserved - take),
+    };
+  });
+}

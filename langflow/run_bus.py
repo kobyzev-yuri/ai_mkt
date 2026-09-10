@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "components"))
 
-from atrium._engine import fulfill, match_lots, negotiate, parse_need, remedy, trace_append
+from atrium.__engine import fulfill, match_lots, negotiate, parse_need, remedy, trace_append
 
 QUERY = "Нужно 50 000 коробок 300×200×150, крафт, доставка в Казань за 14 дней, бюджет до 2,1 млн"
 

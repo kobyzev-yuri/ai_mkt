@@ -4,13 +4,13 @@ import Link from "next/link";
 import { Badge, Stat } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
 import { compactRub, dealStatusLabel, deliveryLine, orderStatusLabel, rating } from "@/lib/format";
-import { companies } from "@/lib/seed";
+import { BARGAIN_TACTICS, tacticLabel } from "@/lib/bargain";
 import { useStore } from "@/lib/store";
 import { trustOf } from "@/lib/trust";
 import { counterpartiesOf } from "@/lib/workspace";
 
 export function Cabinet({ side }: { side: "buy" | "sell" }) {
-  const { company, deals, rfqs, orders, reputations, setCompany } = useStore();
+  const { company, deals, rfqs, orders, reputations, setTactic } = useStore();
   const isSeller = side === "sell";
   const mine = deals.filter((d) => (isSeller ? d.sellerId === company.id : d.buyerId === company.id));
   const incoming = mine.filter((d) => d.status === "countering" || d.status === "agreed" || d.status === "open");
@@ -52,9 +52,26 @@ export function Cabinet({ side }: { side: "buy" | "sell" }) {
         <p className="mt-2 font-display text-2xl">Мандат {isSeller ? "поставки" : "закупки"}</p>
         <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted">{company.agent.mandate}</p>
         <p className="mt-3 font-mono text-[11px] text-muted">
-          тон {company.agent.tone} · приоритет {company.agent.priority} · автоутверждение до{" "}
+          тактика {tacticLabel(company.agent.tactic)} · тон {company.agent.tone} · автоутверждение до{" "}
           {compactRub(company.agent.autoApproveBelow)}
         </p>
+        <p className="mt-5 font-mono text-[10px] uppercase tracking-widest text-muted">Как агент торгуется</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          {BARGAIN_TACTICS.map((t) => {
+            const on = company.agent.tactic === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTactic(t.id)}
+                className={`border px-3 py-3 text-left ${on ? "border-brass/50 bg-bg" : "border-line hover:border-brass/30"}`}
+              >
+                <p className="font-display text-lg">{t.label}</p>
+                <p className="mt-1 text-[12px] leading-relaxed text-muted">{t.blurb}</p>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="mt-6 grid gap-px border border-line bg-line sm:grid-cols-4">
@@ -89,22 +106,12 @@ export function Cabinet({ side }: { side: "buy" | "sell" }) {
                   ? "Пока нет закупщиков в работе. Когда контрагент запустит заявку, он появится здесь."
                   : "Пока нет поставщиков у этой организации. Запустите заявку — или откройте кабинет, где в демо уже есть комнаты."}
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {companies
-                  .filter((c) => (isSeller ? c.role !== "buyer" : c.role !== "seller") && c.id !== company.id)
-                  .filter((c) => counterpartiesOf(c.id, deals, orders, reputations).length > 0)
-                  .slice(0, 4)
-                  .map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => setCompany(c.id)}
-                      className="rounded-full border border-line px-3 py-1.5 font-mono text-[11px] text-paper hover:border-brass/50"
-                    >
-                      {c.short}
-                    </button>
-                  ))}
-              </div>
+              <Link
+                href="/login"
+                className="mt-4 inline-block font-mono text-[11px] uppercase tracking-widest text-brass"
+              >
+                Войти под другой организацией →
+              </Link>
             </div>
           ) : (
             partners.map((row) => (

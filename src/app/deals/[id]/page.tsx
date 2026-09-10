@@ -8,6 +8,8 @@ import { companyById, productById } from "@/lib/agents";
 import { compactRub, days, dealStatusLabel, deliveryLine, qty, rub, when } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Actor, Deal } from "@/lib/types";
+import { tacticLabel } from "@/lib/bargain";
+import { veilChat } from "@/lib/veil-chat";
 
 export default function DealRoomPage() {
   const { id } = useParams<{ id: string }>();
@@ -54,15 +56,20 @@ function Room({
 
   const visible = deal.messages.slice(0, shown);
   const playing = deal.playback && shown < deal.messages.length;
-  const canDecide =
-    !playing &&
-    (deal.status === "agreed" || deal.status === "countering") &&
-    (companyId === deal.buyerId || companyId === deal.sellerId);
+  const iAmSeller = companyId === deal.sellerId;
+  const iAmParty = companyId === deal.buyerId || companyId === deal.sellerId;
+  const viewer = iAmSeller ? "seller" : "buyer";
+  const canApprove = !playing && deal.status === "agreed" && iAmParty;
+  const canReject =
+    !playing && iAmParty && (deal.status === "agreed" || deal.status === "countering");
 
-  const span = Math.max(deal.listPrice - deal.floorPrice, deal.listPrice * 0.12);
-  const min = deal.floorPrice - span * 0.05;
+  const span = iAmSeller
+    ? Math.max(deal.listPrice - deal.floorPrice, deal.listPrice * 0.12)
+    : Math.max(deal.listPrice - deal.currentPrice, deal.listPrice * 0.12);
+  const min = iAmSeller ? deal.floorPrice - span * 0.05 : deal.currentPrice - span * 0.15;
   const max = deal.listPrice + span * 0.08;
   const pct = (v: number) => Math.min(100, Math.max(0, ((v - min) / (max - min)) * 100));
+  const own = iAmSeller ? seller : buyer;
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-8 px-5 py-10 lg:grid-cols-[1.15fr_0.85fr]">
@@ -89,7 +96,7 @@ function Room({
             <li key={m.id} className="rise flex gap-3">
               {m.from === "system" ? (
                 <div className="w-full border border-dashed border-line px-4 py-3 font-mono text-[12px] leading-relaxed text-muted">
-                  {m.text}
+                  {veilChat(m.text, viewer)}
                 </div>
               ) : (
                 <>
@@ -98,7 +105,7 @@ function Room({
                     <p className="font-mono text-[10px] uppercase tracking-wider text-muted">
                       {who(m.from, buyer.agent.name, seller.agent.name)} · {when(m.at)}
                     </p>
-                    <p className="mt-1 text-[14px] leading-relaxed text-paper/90">{m.text}</p>
+                    <p className="mt-1 text-[14px] leading-relaxed text-paper/90">{veilChat(m.text, viewer)}</p>
                   </div>
                 </>
               )}
@@ -109,24 +116,34 @@ function Room({
           <p className="mt-6 font-mono text-[11px] text-brass">агенты печатают…</p>
         )}
 
-        {canDecide && (
+        {deal.status === "agreed" && !playing ? (
+          <p className="mt-8 border border-brass/40 bg-surface px-4 py-3 text-[14px] leading-relaxed text-muted">
+            Торг закрыт. На столе одно предложение — {qty(deal.qty, product.unit)} × {rub(deal.currentPrice)}.
+            Пол и маржа поставщика в эту комнату не входят.
+          </p>
+        ) : null}
+        {canApprove || canReject ? (
           <div className="mt-8 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => onApprove(deal.id)}
-              className="rounded-full bg-brass px-5 py-2.5 text-[13px] font-medium text-bg"
-            >
-              Утвердить сделку
-            </button>
-            <button
-              type="button"
-              onClick={() => onReject(deal.id)}
-              className="rounded-full border border-line px-5 py-2.5 text-[13px] text-muted hover:text-terra"
-            >
-              Отклонить
-            </button>
+            {canApprove ? (
+              <button
+                type="button"
+                onClick={() => onApprove(deal.id)}
+                className="rounded-full bg-brass px-5 py-2.5 text-[13px] font-medium text-bg"
+              >
+                Утвердить сделку
+              </button>
+            ) : null}
+            {canReject ? (
+              <button
+                type="button"
+                onClick={() => onReject(deal.id)}
+                className="rounded-full border border-line px-5 py-2.5 text-[13px] text-muted hover:text-terra"
+              >
+                Отклонить
+              </button>
+            ) : null}
           </div>
-        )}
+        ) : null}
         {deal.status === "approved" && (
           <p className="mt-8 border border-moss/40 bg-surface px-4 py-3 text-[14px] text-moss">
             Сделка утверждена. Запущен контур исполнения: счёт, резерв партий, отгрузка.
@@ -149,20 +166,27 @@ function Room({
 
       <aside className="space-y-4">
         <div className="border border-line bg-surface p-5">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Лестница цены</p>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-muted">
+            {iAmSeller ? "Лестница и ваш пол" : "Условия на столе"}
+          </p>
           <div className="relative mt-6 h-2 rounded-full bg-line">
-            <div
-              className="absolute top-0 h-2 rounded-full bg-brass/40"
-              style={{ left: `${pct(deal.floorPrice)}%`, width: `${Math.max(4, pct(deal.listPrice) - pct(deal.floorPrice))}%` }}
-            />
-            <Mark left={pct(deal.floorPrice)} label="пол" />
+            {iAmSeller ? (
+              <div
+                className="absolute top-0 h-2 rounded-full bg-brass/40"
+                style={{
+                  left: `${pct(deal.floorPrice)}%`,
+                  width: `${Math.max(4, pct(deal.listPrice) - pct(deal.floorPrice))}%`,
+                }}
+              />
+            ) : null}
+            {iAmSeller ? <Mark left={pct(deal.floorPrice)} label="пол" /> : null}
             <Mark left={pct(deal.currentPrice)} label="сейчас" accent />
             <Mark left={pct(deal.listPrice)} label="лист" />
           </div>
           <dl className="mt-10 grid grid-cols-2 gap-3 text-[13px]">
             <Pair k="Лист" v={rub(deal.listPrice)} />
             <Pair k="Текущая" v={rub(deal.currentPrice)} />
-            <Pair k="Пол продавца" v={rub(deal.floorPrice)} />
+            {iAmSeller ? <Pair k="Ваш пол" v={rub(deal.floorPrice)} /> : null}
             <Pair k="Сумма" v={compactRub(deal.currentPrice * deal.qty)} />
             <Pair k="Срок" v={days(deal.leadDays)} />
             <Pair k="Предоплата" v={`${deal.prepayPct}%`} />
@@ -172,12 +196,17 @@ function Room({
         </div>
 
         <div className="border border-line bg-surface p-5">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Мандаты</p>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Ваш мандат</p>
           <p className="mt-3 text-[13px] leading-relaxed text-muted">
-            <span className="text-paper">«{buyer.agent.name}».</span> {buyer.agent.mandate}
+            <span className="text-paper">«{own.agent.name}».</span> {own.agent.mandate}
           </p>
-          <p className="mt-3 text-[13px] leading-relaxed text-muted">
-            <span className="text-paper">«{seller.agent.name}».</span> {seller.agent.mandate}
+          <p className="mt-3 font-mono text-[11px] text-brass">
+            Тактика «{own.agent.name}»: {tacticLabel(iAmSeller ? deal.sellerTactic ?? seller.agent.tactic : deal.buyerTactic ?? buyer.agent.tactic)}
+            {" · "}
+            контрагент: {tacticLabel(iAmSeller ? deal.buyerTactic ?? buyer.agent.tactic : deal.sellerTactic ?? seller.agent.tactic)}
+          </p>
+          <p className="mt-3 font-mono text-[11px] text-muted">
+            Стиль торга виден. Пол, маржа и потолок — нет.
           </p>
         </div>
 

@@ -177,11 +177,7 @@ export default function TrustPage() {
         </p>
         {auditLog.length === 0 ? (
           <p className="mt-6 border border-line bg-surface px-4 py-6 text-[14px] text-muted">
-            Журнал пуст. Запустите{" "}
-            <Link href="/demo" className="text-brass">
-              прогон
-            </Link>{" "}
-            или новую заявку — записи появятся здесь.
+            Журнал пуст. Записи появятся после заявок и подтверждений в кабинетах сторон.
           </p>
         ) : (
           <ol className="mt-6 divide-y divide-line border border-line">

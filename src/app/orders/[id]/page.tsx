@@ -15,7 +15,7 @@ import type { IncidentKind, Order } from "@/lib/types";
 
 export default function OrderPage() {
   const { id } = useParams<{ id: string }>();
-  const { orders, company, reputations, payAdvance, acceptDelivery, payRemainder, reportIncident, acceptIncidentRemedy, escalateOrderIncident, resolveOnPlatform } =
+  const { orders, company, reputations, payAdvance, acceptDelivery, payRemainder, returnLotsToShowcase, reportIncident, acceptIncidentRemedy, escalateOrderIncident, resolveOnPlatform } =
     useStore();
   const order = orders.find((o) => o.id === id);
   if (!order) {
@@ -36,6 +36,7 @@ export default function OrderPage() {
       onPayAdvance={payAdvance}
       onAccept={acceptDelivery}
       onPayRemainder={payRemainder}
+      onReturnLots={returnLotsToShowcase}
       onReport={(kind) => reportIncident(order.id, kind)}
       onAcceptRemedy={(incId) => acceptIncidentRemedy(order.id, incId)}
       onEscalate={(incId) => escalateOrderIncident(order.id, incId)}
@@ -52,6 +53,7 @@ function Room({
   onPayAdvance,
   onAccept,
   onPayRemainder,
+  onReturnLots,
   onReport,
   onAcceptRemedy,
   onEscalate,
@@ -64,6 +66,7 @@ function Room({
   onPayAdvance: (id: string) => void;
   onAccept: (id: string) => void;
   onPayRemainder: (id: string) => void;
+  onReturnLots: (id: string) => void;
   onReport: (kind: IncidentKind) => void;
   onAcceptRemedy: (id: string) => void;
   onEscalate: (id: string) => void;
@@ -121,13 +124,27 @@ function Room({
         {playing && <p className="mt-6 font-mono text-[11px] text-brass">логистика обновляется…</p>}
 
         {party && !playing && order.status === "advance_due" && (
-          <button
-            type="button"
-            onClick={() => onPayAdvance(order.id)}
-            className="mt-8 rounded-full bg-brass px-5 py-2.5 text-[13px] font-medium text-bg"
-          >
-            Агент казначейства оплачивает аванс
-          </button>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => onPayAdvance(order.id)}
+              className="rounded-full bg-brass px-5 py-2.5 text-[13px] font-medium text-bg"
+            >
+              Агент казначейства оплачивает аванс
+            </button>
+            <button
+              type="button"
+              onClick={() => onReturnLots(order.id)}
+              className="rounded-full border border-line px-5 py-2.5 text-[13px] text-muted hover:border-terra/50 hover:text-terra"
+            >
+              Срыв · вернуть партии на витрину
+            </button>
+          </div>
+        )}
+        {order.status === "cancelled" && (
+          <p className="mt-8 border border-line bg-surface px-4 py-3 text-[14px] text-muted">
+            Сделка сорвана до оплаты. Резерв снят, лоты снова ищутся агентами закупки.
+          </p>
         )}
         {party && !playing && (order.status === "in_transit" || order.status === "acceptance_due") && (
           <button

@@ -35,6 +35,8 @@ export function stageIndex(status: Order["status"]): number {
       return 7;
     case "settled":
       return 8;
+    case "cancelled":
+      return 0;
     default:
       return 0;
   }

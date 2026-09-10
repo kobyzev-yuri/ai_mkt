@@ -1,5 +1,5 @@
 import { buildLots } from "./inventory";
-import type { Company, Deal, Order, Product, Rfq, TickerEvent } from "./types";
+import type { BargainTactic, Company, Deal, Order, Product, Rfq, TickerEvent } from "./types";
 
 export const CATEGORIES = [
   "Упаковка",
@@ -30,6 +30,7 @@ export const companies: Company[] = [
       name: "Крафт",
       mandate: "Не опускаться ниже 11% маржи. Партии от 5×MOQ — скидка до 6%. Предоплата не ниже 30%.",
       tone: "flexible",
+      tactic: "market",
       priority: "price",
       minMarginPct: 11,
       autoApproveBelow: 400_000,
@@ -52,6 +53,7 @@ export const companies: Company[] = [
       name: "Прокат",
       mandate: "Минимальная маржа 14%. Срок — только из наличия. Не соглашаться на отсрочку свыше 14 дней.",
       tone: "firm",
+      tactic: "firm",
       priority: "quality",
       minMarginPct: 14,
       autoApproveBelow: 800_000,
@@ -74,6 +76,7 @@ export const companies: Company[] = [
       name: "Контур",
       mandate: "Цена почти фиксирована. Уступать можно сроком и комплектацией, не чеком. Предоплата 50%.",
       tone: "premium",
+      tactic: "firm",
       priority: "quality",
       minMarginPct: 22,
       autoApproveBelow: 250_000,
@@ -96,6 +99,7 @@ export const companies: Company[] = [
       name: "Реагент",
       mandate: "Не торговаться по фасовке. Скидка только на тоннаж. Соблюдать срок годности партий.",
       tone: "flexible",
+      tactic: "fast",
       priority: "speed",
       minMarginPct: 12,
       autoApproveBelow: 350_000,
@@ -118,6 +122,7 @@ export const companies: Company[] = [
       name: "Ткань",
       mandate: "Можно уступить до 9% на комплекты от 100 шт. Не обещать пошив быстрее 8 дней.",
       tone: "flexible",
+      tactic: "fast",
       priority: "speed",
       minMarginPct: 13,
       autoApproveBelow: 300_000,
@@ -140,6 +145,7 @@ export const companies: Company[] = [
       name: "Бор",
       mandate: "Цена привязана к влажности и сорту. Торг только на объёме от 40 м³.",
       tone: "firm",
+      tactic: "firm",
       priority: "quality",
       minMarginPct: 15,
       autoApproveBelow: 500_000,
@@ -162,6 +168,7 @@ export const companies: Company[] = [
       name: "Закуп",
       mandate: "Не превышать бюджет заявки. Предпочитать Казань и Поволжье. Срок важнее бренда.",
       tone: "flexible",
+      tactic: "market",
       priority: "price",
       minMarginPct: 0,
       autoApproveBelow: 200_000,
@@ -184,6 +191,7 @@ export const companies: Company[] = [
       name: "Смета",
       mandate: "Срок поставки важнее цены. Не принимать отгрузку позже графика объекта.",
       tone: "firm",
+      tactic: "fast",
       priority: "speed",
       minMarginPct: 0,
       autoApproveBelow: 1_200_000,
@@ -206,6 +214,7 @@ export const companies: Company[] = [
       name: "Поле",
       mandate: "Брать из наличия. Не переплачивать больше 6% к среднему рынку.",
       tone: "flexible",
+      tactic: "market",
       priority: "price",
       minMarginPct: 0,
       autoApproveBelow: 450_000,
@@ -228,6 +237,7 @@ export const companies: Company[] = [
       name: "Полка",
       mandate: "Жёсткий потолок цены. Готов закрывать быстро при попадании в сетку.",
       tone: "firm",
+      tactic: "firm",
       priority: "price",
       minMarginPct: 0,
       autoApproveBelow: 180_000,
@@ -235,6 +245,10 @@ export const companies: Company[] = [
     },
   },
 ];
+
+export function seedTactics(): Record<string, BargainTactic> {
+  return Object.fromEntries(companies.map((c) => [c.id, c.agent.tactic]));
+}
 
 export const products: Product[] = [
   {
@@ -683,7 +697,7 @@ export const seedDeals: Deal[] = [
         at: "2026-08-29T09:55:00+03:00",
         delayMs: 0,
         from: "seller-agent",
-        text: "Доставку берём на себя. Пол 14% маржи не пускает ниже 51 200. Предоплата 40%. Это последний шаг в мандате.",
+        text: "Доставку берём на себя. Фиксирую 51 200 ₽/т, предоплата 40%. Это крайнее предложение.",
       },
       {
         id: "m5",
@@ -779,14 +793,14 @@ export const seedDeals: Deal[] = [
         at: "2026-08-31T08:44:00+03:00",
         delayMs: 0,
         from: "seller-agent",
-        text: "Без шеврона срок не растёт. Могу 2 290 ₽ с доставкой, предоплата 40%. Ниже — режем маржу мандата.",
+        text: "Без шеврона срок не растёт. Могу 2 290 ₽ с доставкой, предоплата 40%. Ниже не идём.",
       },
       {
         id: "ms5",
         at: "2026-08-31T08:45:00+03:00",
         delayMs: 0,
         from: "system",
-        text: "Переговоры открыты. Агент «Поле» сверяет 2 290 ₽ с потолком 2 400 ₽ — в мандате, ждёт вашего взгляда или следующего шага агента.",
+        text: "Переговоры открыты. Агент «Поле» сверяет 2 290 ₽ со своим мандатом и ждёт вашего взгляда.",
       },
     ],
   },
@@ -827,7 +841,7 @@ export const seedDeals: Deal[] = [
         at: "2026-08-31T10:41:00+03:00",
         delayMs: 0,
         from: "system",
-        text: "Входящий запрос от агента «Полка» (Волга Ритейл): 18 000 коробок 300×200×150 крафт, потолок 40 ₽.",
+        text: "Входящий запрос от агента «Полка» (Волга Ритейл): 18 000 коробок 300×200×150 крафт.",
       },
       {
         id: "mb2",
@@ -841,7 +855,7 @@ export const seedDeals: Deal[] = [
         at: "2026-08-31T10:47:00+03:00",
         delayMs: 0,
         from: "system",
-        text: "Агент «Крафт» ждёт контрпредложения. Пол мандата: 35,30 ₽. Есть пространство для торга.",
+        text: "Агент «Крафт» ждёт контрпредложения.",
       },
     ],
   },

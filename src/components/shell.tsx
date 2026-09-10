@@ -1,35 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { deskHome, deskLabel, isDemoPath, isPublicPath, navWorkspaces, pathAllowed } from "@/lib/accounts";
+import { isDemoApp } from "@/lib/app-mode";
 import { OLLAMA_MODELS } from "@/lib/ollama";
-import { companies } from "@/lib/seed";
+import { useSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
-import {
-  SUBNAV,
-  WORKSPACES,
-  companiesForWorkspace,
-  companyFitsWorkspace,
-  workspaceFromPath,
-  type WorkspaceId,
-} from "@/lib/workspace";
+import { SUBNAV, WORKSPACES, workspaceFromPath } from "@/lib/workspace";
 
-function subnavActive(href: string, pathname: string, ws: WorkspaceId): boolean {
+function subnavActive(href: string, pathname: string): boolean {
   if (href === "/" || href === "/buy" || href === "/sell" || href === "/office") {
     return pathname === href;
   }
   return pathname.startsWith(href);
 }
 
+function SignOutButton({ onLeave }: { onLeave: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onLeave}
+      className="shrink-0 rounded-full border border-line px-3 py-1.5 font-mono text-[11px] text-paper hover:border-brass/50"
+    >
+      Выйти
+    </button>
+  );
+}
+
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { company, setCompany, hydrated, llmModel, setLlmModel, lastBuyerId, lastSellerId } = useStore();
+  const router = useRouter();
+  const { account, hydrated, signOut } = useSession();
+  const { company, llmModel, setLlmModel } = useStore();
   const [models, setModels] = useState<{ id: string; label: string }[]>(
     OLLAMA_MODELS.map((m) => ({ id: m.id, label: m.label })),
   );
-  const ws = workspaceFromPath(pathname, company.role);
-  const roster = companiesForWorkspace(ws);
+  const login = pathname.startsWith("/login");
+  const demoApp = isDemoApp();
+  const demoRun = demoApp || isDemoPath(pathname);
+  const desk = account?.desk;
+  const ws = workspaceFromPath(pathname, company.role, desk);
+  const visible = WORKSPACES.filter((item) => !desk || navWorkspaces(desk).includes(item.id));
 
   useEffect(() => {
     fetch("/api/ollama/models")
@@ -43,25 +56,82 @@ export function Shell({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (demoApp) return;
     if (!hydrated) return;
-    if (companyFitsWorkspace(company, ws)) return;
-    const next = ws === "buy" ? lastBuyerId : ws === "sell" ? lastSellerId : null;
-    if (!next || next === company.id) return;
-    setCompany(next);
-  }, [ws, company, hydrated, lastBuyerId, lastSellerId, setCompany]);
+    if (isPublicPath(pathname)) return;
+    if (!account) {
+      router.replace("/login");
+      return;
+    }
+    if (!pathAllowed(account.desk, pathname)) {
+      router.replace(deskHome(account.desk));
+    }
+  }, [account, demoApp, hydrated, pathname, router]);
+
+  function leave() {
+    signOut();
+    router.replace("/login");
+  }
+
+  if (demoRun) {
+    return (
+      <>
+        <header className="border-b border-line">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-3.5">
+            <Link href="/demo" className="leading-none">
+              <span className="font-display text-[1.65rem] tracking-wide text-brass-2">Atrium</span>
+              <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.28em] text-muted">
+                прогон сделки
+              </span>
+            </Link>
+            <nav className="flex shrink-0 items-center gap-2">
+              <span className="font-mono text-[11px] text-muted">без входа</span>
+            </nav>
+          </div>
+        </header>
+        <main className="flex flex-1 flex-col">{children}</main>
+        <footer className="border-t border-line">
+          <div className="mx-auto flex max-w-6xl justify-between px-5 py-8 text-[12px] text-muted">
+            <p>Прогон для жюри. Без кабинетов и без входа.</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest">Не финансовая оферта</p>
+          </div>
+        </footer>
+      </>
+    );
+  }
+
+  if (!account && login) {
+    return (
+      <>
+        <header className="border-b border-line">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
+            <Link href="/login" className="leading-none">
+              <span className="font-display text-[1.65rem] tracking-wide text-brass-2">Atrium</span>
+              <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.28em] text-muted">вход</span>
+            </Link>
+          </div>
+        </header>
+        <main className="flex flex-1 flex-col">{children}</main>
+      </>
+    );
+  }
+
+  if (!account) {
+    return <main className="flex flex-1 items-center justify-center text-muted">вход…</main>;
+  }
 
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center gap-5 px-5 py-3.5">
-          <Link href="/" className="shrink-0 leading-none">
+          <Link href={deskHome(account.desk)} className="shrink-0 leading-none">
             <span className="font-display text-[1.65rem] tracking-wide text-brass-2">Atrium</span>
             <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.28em] text-muted">
-              Agent exchange
+              {deskLabel(account.desk)}
             </span>
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
-            {WORKSPACES.map((item) => {
+            {visible.map((item) => {
               const active = ws === item.id;
               return (
                 <Link
@@ -77,13 +147,11 @@ export function Shell({ children }: { children: ReactNode }) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-2">
-            {hydrated && (
-              <div className="hidden items-center gap-2 xl:flex">
-                <span className="live-dot h-1.5 w-1.5 rounded-full bg-moss" />
-                <span className="font-mono text-[11px] text-muted">«{company.agent.name}»</span>
-              </div>
-            )}
-            {ws === "office" || ws === "buy" ? (
+            <div className="hidden text-right sm:block">
+              <p className="font-mono text-[10px] uppercase tracking-widest text-brass">{deskLabel(account.desk)}</p>
+              <p className="max-w-[200px] truncate font-mono text-[11px] text-paper">{account.org}</p>
+            </div>
+            {account.desk === "office" ? (
               <>
                 <label className="sr-only" htmlFor="model">
                   Модель
@@ -102,28 +170,11 @@ export function Shell({ children }: { children: ReactNode }) {
                 </select>
               </>
             ) : null}
-            <label className="sr-only" htmlFor="company">
-              Организация
-            </label>
-            <select
-              id="company"
-              value={roster.some((c) => c.id === company.id) ? company.id : roster[0]?.id}
-              onChange={(e) => setCompany(e.target.value)}
-              className="max-w-[200px] truncate rounded-full border border-line bg-surface px-3 py-1.5 font-mono text-[11px] text-paper outline-none"
-            >
-              {(roster.length ? roster : companies).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.short}
-                  {ws === "plaza" || ws === "office"
-                    ? ` · ${c.role === "seller" ? "поставщик" : "закупщик"}`
-                    : ""}
-                </option>
-              ))}
-            </select>
+            <SignOutButton onLeave={leave} />
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto border-t border-line px-4 py-2 md:hidden">
-          {WORKSPACES.map((item) => (
+          {visible.map((item) => (
             <Link
               key={item.id}
               href={item.href}
@@ -138,7 +189,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <nav className="border-t border-line bg-surface/40">
           <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-2">
             {SUBNAV[ws].map((item) => {
-              const active = subnavActive(item.href, pathname, ws);
+              const active = subnavActive(item.href, pathname);
               return (
                 <Link
                   key={`${ws}-${item.href}`}
@@ -158,7 +209,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-5 py-8 text-[12px] text-muted sm:flex-row sm:items-center sm:justify-between">
           <p>
-            Atrium · закупки, поставки и бэкофис раздельно. Реплики — локальный Ollama; цены и рейтинг — движок.
+            {account.org} · {deskLabel(account.desk)}. Реплики — локальный Ollama; цены и рейтинг — движок.
           </p>
           <p className="font-mono text-[10px] uppercase tracking-widest">Не финансовая оферта</p>
         </div>

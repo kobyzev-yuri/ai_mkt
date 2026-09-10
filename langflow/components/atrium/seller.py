@@ -1,9 +1,32 @@
-"""Shared Atrium protocol for Langflow nodes. Numbers stay in the engine; LLM is not a party."""
+"""Atrium · Агент поставки. Self-contained: Langflow executes this file in isolation."""
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
+from lfx.custom.custom_component.component import Component
+from lfx.io import BoolInput, DataInput, MessageTextInput, Output
+from lfx.schema.data import Data
+from lfx.schema.message import Message
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return value
+    data = getattr(value, "data", None)
+    return dict(data) if isinstance(data, dict) else {}
+
+
+def _text(value: Any) -> str:
+    if value is None:
+        return ""
+    text = getattr(value, "text", None)
+    if isinstance(text, str) and text:
+        return text
+    return str(value)
 
 def trace_append(payload: dict[str, Any], role: str, act: str) -> dict[str, Any]:
     data = dict(payload or {})
@@ -70,3 +93,16 @@ def remedy(kind: str = "delay_ship") -> dict[str, Any]:
         "proposed": "довоз через 2 дня, рейтинг не трогаем",
         "rating_hit": False,
     }
+
+class SellerAgent(Component):
+    display_name = "Atrium · Агент поставки"
+    description = "Предложение от лотов. Уступает только до пола маржи."
+    icon = "Package"
+    name = "atrium_seller"
+    inputs = [DataInput(name="bus", display_name="Шина")]
+    outputs = [Output(display_name="Предложение", name="offer", method="offer")]
+
+    def offer(self) -> Data:
+        bus = _as_dict(self.bus)
+        payload = trace_append({**bus, "speech": "Предложение"}, "seller-agent", "Предложение")
+        return Data(data=payload)

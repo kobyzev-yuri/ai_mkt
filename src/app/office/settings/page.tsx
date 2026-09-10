@@ -1,6 +1,8 @@
 "use client";
 
 import { OLLAMA_MODELS } from "@/lib/ollama";
+import { tacticLabel, withTactic } from "@/lib/bargain";
+import type { BargainTactic } from "@/lib/types";
 import { companies } from "@/lib/seed";
 import { compactRub } from "@/lib/format";
 import { useStore } from "@/lib/store";
@@ -19,7 +21,7 @@ const PRIORITY: Record<string, string> = {
 };
 
 export default function OfficeSettingsPage() {
-  const { llmModel, setLlmModel, resetDemo, lastBuyerId, lastSellerId } = useStore();
+  const { llmModel, setLlmModel, resetDemo, lastBuyerId, lastSellerId, tactics } = useStore();
   const [models, setModels] = useState<{ id: string; label: string }[]>(
     OLLAMA_MODELS.map((m) => ({ id: m.id, label: m.label })),
   );
@@ -82,8 +84,8 @@ export default function OfficeSettingsPage() {
         </div>
       </section>
 
-      <MandateGroup title="Закупщики" rows={buyers} />
-      <MandateGroup title="Поставщики" rows={sellers} />
+      <MandateGroup title="Закупщики" rows={buyers} tactics={tactics} />
+      <MandateGroup title="Поставщики" rows={sellers} tactics={tactics} />
     </div>
   );
 }
@@ -91,15 +93,19 @@ export default function OfficeSettingsPage() {
 function MandateGroup({
   title,
   rows,
+  tactics,
 }: {
   title: string;
   rows: typeof companies;
+  tactics: Record<string, BargainTactic>;
 }) {
   return (
     <section className="mt-12">
       <h2 className="font-display text-3xl">{title}</h2>
       <div className="mt-5 divide-y divide-line border border-line">
-        {rows.map((c) => (
+        {rows.map((raw) => {
+          const c = withTactic(raw, tactics);
+          return (
           <div key={c.id} className="bg-surface px-4 py-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <p className="font-display text-2xl">{c.short}</p>
@@ -107,11 +113,13 @@ function MandateGroup({
             </div>
             <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-muted">{c.agent.mandate}</p>
             <p className="mt-2 font-mono text-[11px] text-muted">
-              {TONE[c.agent.tone] ?? c.agent.tone} · {PRIORITY[c.agent.priority] ?? c.agent.priority} · автоутверждение
-              до {compactRub(c.agent.autoApproveBelow)} · пол маржи {c.agent.minMarginPct}%
+              тактика {tacticLabel(c.agent.tactic)} · {TONE[c.agent.tone] ?? c.agent.tone} ·{" "}
+              {PRIORITY[c.agent.priority] ?? c.agent.priority} · автоутверждение до {compactRub(c.agent.autoApproveBelow)}
+              {c.role !== "buyer" ? ` · пол маржи ${c.agent.minMarginPct}%` : ""}
             </p>
           </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

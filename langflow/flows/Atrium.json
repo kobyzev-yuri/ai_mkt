@@ -1,0 +1,2274 @@
+{
+  "id": "8f3c1a2e-6b47-4d91-9c0a-7e2b18d4a9c1",
+  "name": "Atrium · шина агентов S1–S3",
+  "description": "Шина S1–S3, затем Atrium · Qwen (Ollama qwen2.5:14b) озвучивает итог.",
+  "is_component": false,
+  "endpoint_name": "atrium",
+  "data": {
+    "nodes": [
+      {
+        "id": "atrium_orchestrator-b783a",
+        "type": "genericNode",
+        "position": {
+          "x": 240,
+          "y": 48
+        },
+        "data": {
+          "id": "atrium_orchestrator-b783a",
+          "type": "atrium_orchestrator",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Atrium · Оркестратор. Self-contained: Langflow executes this file in isolation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom typing import Any\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, DataInput, MessageTextInput, Output\nfrom lfx.schema.data import Data\nfrom lfx.schema.message import Message\n\n\ndef _as_dict(value: Any) -> dict[str, Any]:\n    if value is None:\n        return {}\n    if isinstance(value, dict):\n        return value\n    data = getattr(value, \"data\", None)\n    return dict(data) if isinstance(data, dict) else {}\n\n\ndef _text(value: Any) -> str:\n    if value is None:\n        return \"\"\n    text = getattr(value, \"text\", None)\n    if isinstance(text, str) and text:\n        return text\n    return str(value)\n\ndef trace_append(payload: dict[str, Any], role: str, act: str) -> dict[str, Any]:\n    data = dict(payload or {})\n    trail = list(data.get(\"trace\") or [])\n    trail.append({\"role\": role, \"act\": act})\n    data[\"trace\"] = trail\n    return data\n\n\ndef parse_need(query: str) -> dict[str, Any]:\n    q = (query or \"\").lower()\n    city = \"Казань\" if \"казан\" in q else \"Москва\" if \"москв\" in q else None\n    qty = 50_000 if \"50\" in q or \"50000\" in q.replace(\" \", \"\") else None\n    budget = 2_100_000 if \"2,1\" in q or \"2.1\" in q or \"млн\" in q else None\n    return {\n        \"query\": query,\n        \"category\": \"Упаковка\" if \"короб\" in q or \"крафт\" in q else None,\n        \"city\": city,\n        \"qty\": qty,\n        \"budget\": budget,\n        \"unit\": \"шт\",\n    }\n\n\ndef match_lots(need: dict[str, Any]) -> list[dict[str, Any]]:\n    qty = int(need.get(\"qty\") or 18_000)\n    return [\n        {\"seller\": \"СеверПак\", \"sku\": \"короб 300×200×150\", \"price\": 42, \"floor\": 38, \"qty\": qty, \"ready_days\": 9},\n        {\"seller\": \"ВолгаКомплект\", \"sku\": \"короб 300×200×150\", \"price\": 44, \"floor\": 40, \"qty\": qty, \"ready_days\": 12},\n    ]\n\n\ndef negotiate(lots: list[dict[str, Any]], budget: float | None) -> dict[str, Any]:\n    if not lots:\n        return {\"status\": \"rejected\", \"reason\": \"нет партий\"}\n    best = min(lots, key=lambda x: x[\"price\"])\n    price = max(float(best[\"floor\"]), float(best[\"price\"]) * 0.97)\n    total = price * int(best[\"qty\"])\n    if budget and total > budget:\n        return {\"status\": \"rejected\", \"reason\": \"бюджет\", \"price\": price, \"total\": total}\n    return {\n        \"status\": \"agreed\",\n        \"seller\": best[\"seller\"],\n        \"price\": round(price, 2),\n        \"qty\": best[\"qty\"],\n        \"total\": round(total, 2),\n        \"floor_ok\": price >= float(best[\"floor\"]),\n    }\n\n\ndef fulfill(deal: dict[str, Any], *, paid: bool) -> dict[str, Any]:\n    if not paid:\n        return {\"status\": \"advance_due\", \"note\": \"склад не едет без аванса\"}\n    return {\n        \"status\": \"shipping\",\n        \"documents\": [\"счёт\", \"ТТН\", \"УПД\"],\n        \"deal\": deal,\n    }\n\n\ndef remedy(kind: str = \"delay_ship\") -> dict[str, Any]:\n    return {\n        \"kind\": kind,\n        \"proposed\": \"довоз через 2 дня, рейтинг не трогаем\",\n        \"rating_hit\": False,\n    }\n\nclass Orchestrator(Component):\n    display_name = \"Atrium · Оркестратор\"\n    description = \"Раскладывает S1→S2→S3. Не торгуется и не двигает цену.\"\n    icon = \"Workflow\"\n    name = \"atrium_orchestrator\"\n    inputs = [MessageTextInput(name=\"need_text\", display_name=\"Потребность\", tool_mode=True)]\n    outputs = [Output(display_name=\"План\", name=\"plan\", method=\"plan\")]\n\n    def plan(self) -> Data:\n        text = _text(self.need_text)\n        payload = trace_append({\"need_text\": text, \"scenarios\": [\"S1\", \"S2\", \"S3\"]}, \"orchestrator\", \"сценарий\")\n        return Data(data=payload)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "need_text": {
+                "tool_mode": true,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "need_text",
+                "value": "",
+                "display_name": "Потребность",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              }
+            },
+            "description": "Раскладывает S1→S2→S3. Не торгуется и не двигает цену.",
+            "icon": "Workflow",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Atrium · Оркестратор",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "plan",
+                "display_name": "План",
+                "method": "plan",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "need_text"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.atrium__",
+              "code_hash": "ce0fe632b1ab",
+              "dependencies": {
+                "total_dependencies": 1,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      },
+      {
+        "id": "atrium_parser-64e49",
+        "type": "genericNode",
+        "position": {
+          "x": 240,
+          "y": 220
+        },
+        "data": {
+          "id": "atrium_parser-64e49",
+          "type": "atrium_parser",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "bus": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bus",
+                "value": "",
+                "display_name": "Шина",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Atrium · Парсер. Self-contained: Langflow executes this file in isolation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom typing import Any\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, DataInput, MessageTextInput, Output\nfrom lfx.schema.data import Data\nfrom lfx.schema.message import Message\n\n\ndef _as_dict(value: Any) -> dict[str, Any]:\n    if value is None:\n        return {}\n    if isinstance(value, dict):\n        return value\n    data = getattr(value, \"data\", None)\n    return dict(data) if isinstance(data, dict) else {}\n\n\ndef _text(value: Any) -> str:\n    if value is None:\n        return \"\"\n    text = getattr(value, \"text\", None)\n    if isinstance(text, str) and text:\n        return text\n    return str(value)\n\ndef trace_append(payload: dict[str, Any], role: str, act: str) -> dict[str, Any]:\n    data = dict(payload or {})\n    trail = list(data.get(\"trace\") or [])\n    trail.append({\"role\": role, \"act\": act})\n    data[\"trace\"] = trail\n    return data\n\n\ndef parse_need(query: str) -> dict[str, Any]:\n    q = (query or \"\").lower()\n    city = \"Казань\" if \"казан\" in q else \"Москва\" if \"москв\" in q else None\n    qty = 50_000 if \"50\" in q or \"50000\" in q.replace(\" \", \"\") else None\n    budget = 2_100_000 if \"2,1\" in q or \"2.1\" in q or \"млн\" in q else None\n    return {\n        \"query\": query,\n        \"category\": \"Упаковка\" if \"короб\" in q or \"крафт\" in q else None,\n        \"city\": city,\n        \"qty\": qty,\n        \"budget\": budget,\n        \"unit\": \"шт\",\n    }\n\n\ndef match_lots(need: dict[str, Any]) -> list[dict[str, Any]]:\n    qty = int(need.get(\"qty\") or 18_000)\n    return [\n        {\"seller\": \"СеверПак\", \"sku\": \"короб 300×200×150\", \"price\": 42, \"floor\": 38, \"qty\": qty, \"ready_days\": 9},\n        {\"seller\": \"ВолгаКомплект\", \"sku\": \"короб 300×200×150\", \"price\": 44, \"floor\": 40, \"qty\": qty, \"ready_days\": 12},\n    ]\n\n\ndef negotiate(lots: list[dict[str, Any]], budget: float | None) -> dict[str, Any]:\n    if not lots:\n        return {\"status\": \"rejected\", \"reason\": \"нет партий\"}\n    best = min(lots, key=lambda x: x[\"price\"])\n    price = max(float(best[\"floor\"]), float(best[\"price\"]) * 0.97)\n    total = price * int(best[\"qty\"])\n    if budget and total > budget:\n        return {\"status\": \"rejected\", \"reason\": \"бюджет\", \"price\": price, \"total\": total}\n    return {\n        \"status\": \"agreed\",\n        \"seller\": best[\"seller\"],\n        \"price\": round(price, 2),\n        \"qty\": best[\"qty\"],\n        \"total\": round(total, 2),\n        \"floor_ok\": price >= float(best[\"floor\"]),\n    }\n\n\ndef fulfill(deal: dict[str, Any], *, paid: bool) -> dict[str, Any]:\n    if not paid:\n        return {\"status\": \"advance_due\", \"note\": \"склад не едет без аванса\"}\n    return {\n        \"status\": \"shipping\",\n        \"documents\": [\"счёт\", \"ТТН\", \"УПД\"],\n        \"deal\": deal,\n    }\n\n\ndef remedy(kind: str = \"delay_ship\") -> dict[str, Any]:\n    return {\n        \"kind\": kind,\n        \"proposed\": \"довоз через 2 дня, рейтинг не трогаем\",\n        \"rating_hit\": False,\n    }\n\nclass Parser(Component):\n    display_name = \"Atrium · Парсер\"\n    description = \"Структура заявки из свободного текста. Не выдумывает объём.\"\n    icon = \"FileText\"\n    name = \"atrium_parser\"\n    inputs = [\n        DataInput(name=\"bus\", display_name=\"Шина\"),\n        MessageTextInput(name=\"need_text\", display_name=\"Потребность (если шина пуста)\"),\n    ]\n    outputs = [Output(display_name=\"Заявка\", name=\"need\", method=\"parse\")]\n\n    def parse(self) -> Data:\n        bus = _as_dict(self.bus)\n        text = bus.get(\"need_text\") or _text(self.need_text)\n        need = parse_need(str(text))\n        payload = trace_append({**bus, \"need\": need}, \"parser\", \"текст\")\n        return Data(data=payload)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "need_text": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "need_text",
+                "value": "",
+                "display_name": "Потребность (если шина пуста)",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              }
+            },
+            "description": "Структура заявки из свободного текста. Не выдумывает объём.",
+            "icon": "FileText",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Atrium · Парсер",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "need",
+                "display_name": "Заявка",
+                "method": "parse",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "bus",
+              "need_text"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.atrium__",
+              "code_hash": "d537373f8832",
+              "dependencies": {
+                "total_dependencies": 1,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      },
+      {
+        "id": "atrium_matcher-21683",
+        "type": "genericNode",
+        "position": {
+          "x": 480,
+          "y": 140
+        },
+        "data": {
+          "id": "atrium_matcher-21683",
+          "type": "atrium_matcher",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "bus": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bus",
+                "value": "",
+                "display_name": "Шина",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Atrium · Поиск партий. Self-contained: Langflow executes this file in isolation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom typing import Any\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, DataInput, MessageTextInput, Output\nfrom lfx.schema.data import Data\nfrom lfx.schema.message import Message\n\n\ndef _as_dict(value: Any) -> dict[str, Any]:\n    if value is None:\n        return {}\n    if isinstance(value, dict):\n        return value\n    data = getattr(value, \"data\", None)\n    return dict(data) if isinstance(data, dict) else {}\n\n\ndef _text(value: Any) -> str:\n    if value is None:\n        return \"\"\n    text = getattr(value, \"text\", None)\n    if isinstance(text, str) and text:\n        return text\n    return str(value)\n\ndef trace_append(payload: dict[str, Any], role: str, act: str) -> dict[str, Any]:\n    data = dict(payload or {})\n    trail = list(data.get(\"trace\") or [])\n    trail.append({\"role\": role, \"act\": act})\n    data[\"trace\"] = trail\n    return data\n\n\ndef parse_need(query: str) -> dict[str, Any]:\n    q = (query or \"\").lower()\n    city = \"Казань\" if \"казан\" in q else \"Москва\" if \"москв\" in q else None\n    qty = 50_000 if \"50\" in q or \"50000\" in q.replace(\" \", \"\") else None\n    budget = 2_100_000 if \"2,1\" in q or \"2.1\" in q or \"млн\" in q else None\n    return {\n        \"query\": query,\n        \"category\": \"Упаковка\" if \"короб\" in q or \"крафт\" in q else None,\n        \"city\": city,\n        \"qty\": qty,\n        \"budget\": budget,\n        \"unit\": \"шт\",\n    }\n\n\ndef match_lots(need: dict[str, Any]) -> list[dict[str, Any]]:\n    qty = int(need.get(\"qty\") or 18_000)\n    return [\n        {\"seller\": \"СеверПак\", \"sku\": \"короб 300×200×150\", \"price\": 42, \"floor\": 38, \"qty\": qty, \"ready_days\": 9},\n        {\"seller\": \"ВолгаКомплект\", \"sku\": \"короб 300×200×150\", \"price\": 44, \"floor\": 40, \"qty\": qty, \"ready_days\": 12},\n    ]\n\n\ndef negotiate(lots: list[dict[str, Any]], budget: float | None) -> dict[str, Any]:\n    if not lots:\n        return {\"status\": \"rejected\", \"reason\": \"нет партий\"}\n    best = min(lots, key=lambda x: x[\"price\"])\n    price = max(float(best[\"floor\"]), float(best[\"price\"]) * 0.97)\n    total = price * int(best[\"qty\"])\n    if budget and total > budget:\n        return {\"status\": \"rejected\", \"reason\": \"бюджет\", \"price\": price, \"total\": total}\n    return {\n        \"status\": \"agreed\",\n        \"seller\": best[\"seller\"],\n        \"price\": round(price, 2),\n        \"qty\": best[\"qty\"],\n        \"total\": round(total, 2),\n        \"floor_ok\": price >= float(best[\"floor\"]),\n    }\n\n\ndef fulfill(deal: dict[str, Any], *, paid: bool) -> dict[str, Any]:\n    if not paid:\n        return {\"status\": \"advance_due\", \"note\": \"склад не едет без аванса\"}\n    return {\n        \"status\": \"shipping\",\n        \"documents\": [\"счёт\", \"ТТН\", \"УПД\"],\n        \"deal\": deal,\n    }\n\n\ndef remedy(kind: str = \"delay_ship\") -> dict[str, Any]:\n    return {\n        \"kind\": kind,\n        \"proposed\": \"довоз через 2 дня, рейтинг не трогаем\",\n        \"rating_hit\": False,\n    }\n\nclass Matcher(Component):\n    display_name = \"Atrium · Поиск партий\"\n    description = \"Подбор свободных лотов. Не обещает то, чего нет.\"\n    icon = \"ScanSearch\"\n    name = \"atrium_matcher\"\n    inputs = [DataInput(name=\"bus\", display_name=\"Шина\")]\n    outputs = [Output(display_name=\"Лоты\", name=\"lots\", method=\"match\")]\n\n    def match(self) -> Data:\n        bus = _as_dict(self.bus)\n        lots = match_lots(bus.get(\"need\") or {})\n        payload = trace_append({**bus, \"lots\": lots}, \"matcher\", \"свободные лоты\")\n        return Data(data=payload)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Подбор свободных лотов. Не обещает то, чего нет.",
+            "icon": "ScanSearch",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Atrium · Поиск партий",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "lots",
+                "display_name": "Лоты",
+                "method": "match",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "bus"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.atrium___",
+              "code_hash": "bed98abebd55",
+              "dependencies": {
+                "total_dependencies": 1,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      },
+      {
+        "id": "atrium_buyer-73afd",
+        "type": "genericNode",
+        "position": {
+          "x": 720,
+          "y": 48
+        },
+        "data": {
+          "id": "atrium_buyer-73afd",
+          "type": "atrium_buyer",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "bus": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bus",
+                "value": "",
+                "display_name": "Шина",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Atrium · Агент закупки. Self-contained: Langflow executes this file in isolation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom typing import Any\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, DataInput, MessageTextInput, Output\nfrom lfx.schema.data import Data\nfrom lfx.schema.message import Message\n\n\ndef _as_dict(value: Any) -> dict[str, Any]:\n    if value is None:\n        return {}\n    if isinstance(value, dict):\n        return value\n    data = getattr(value, \"data\", None)\n    return dict(data) if isinstance(data, dict) else {}\n\n\ndef _text(value: Any) -> str:\n    if value is None:\n        return \"\"\n    text = getattr(value, \"text\", None)\n    if isinstance(text, str) and text:\n        return text\n    return str(value)\n\ndef trace_append(payload: dict[str, Any], role: str, act: str) -> dict[str, Any]:\n    data = dict(payload or {})\n    trail = list(data.get(\"trace\") or [])\n    trail.append({\"role\": role, \"act\": act})\n    data[\"trace\"] = trail\n    return data\n\n\ndef parse_need(query: str) -> dict[str, Any]:\n    q = (query or \"\").lower()\n    city = \"Казань\" if \"казан\" in q else \"Москва\" if \"москв\" in q else None\n    qty = 50_000 if \"50\" in q or \"50000\" in q.replace(\" \", \"\") else None\n    budget = 2_100_000 if \"2,1\" in q or \"2.1\" in q or \"млн\" in q else None\n    return {\n        \"query\": query,\n        \"category\": \"Упаковка\" if \"короб\" in q or \"крафт\" in q else None,\n        \"city\": city,\n        \"qty\": qty,\n        \"budget\": budget,\n        \"unit\": \"шт\",\n    }\n\n\ndef match_lots(need: dict[str, Any]) -> list[dict[str, Any]]:\n    qty = int(need.get(\"qty\") or 18_000)\n    return [\n        {\"seller\": \"СеверПак\", \"sku\": \"короб 300×200×150\", \"price\": 42, \"floor\": 38, \"qty\": qty, \"ready_days\": 9},\n        {\"seller\": \"ВолгаКомплект\", \"sku\": \"короб 300×200×150\", \"price\": 44, \"floor\": 40, \"qty\": qty, \"ready_days\": 12},\n    ]\n\n\ndef negotiate(lots: list[dict[str, Any]], budget: float | None) -> dict[str, Any]:\n    if not lots:\n        return {\"status\": \"rejected\", \"reason\": \"нет партий\"}\n    best = min(lots, key=lambda x: x[\"price\"])\n    price = max(float(best[\"floor\"]), float(best[\"price\"]) * 0.97)\n    total = price * int(best[\"qty\"])\n    if budget and total > budget:\n        return {\"status\": \"rejected\", \"reason\": \"бюджет\", \"price\": price, \"total\": total}\n    return {\n        \"status\": \"agreed\",\n        \"seller\": best[\"seller\"],\n        \"price\": round(price, 2),\n        \"qty\": best[\"qty\"],\n        \"total\": round(total, 2),\n        \"floor_ok\": price >= float(best[\"floor\"]),\n    }\n\n\ndef fulfill(deal: dict[str, Any], *, paid: bool) -> dict[str, Any]:\n    if not paid:\n        return {\"status\": \"advance_due\", \"note\": \"склад не едет без аванса\"}\n    return {\n        \"status\": \"shipping\",\n        \"documents\": [\"счёт\", \"ТТН\", \"УПД\"],\n        \"deal\": deal,\n    }\n\n\ndef remedy(kind: str = \"delay_ship\") -> dict[str, Any]:\n    return {\n        \"kind\": kind,\n        \"proposed\": \"довоз через 2 дня, рейтинг не трогаем\",\n        \"rating_hit\": False,\n    }\n\nclass BuyerAgent(Component):\n    display_name = \"Atrium · Агент закупки\"\n    description = \"Заявка и встречное в мандате покупателя. Не платит.\"\n    icon = \"User\"\n    name = \"atrium_buyer\"\n    inputs = [DataInput(name=\"bus\", display_name=\"Шина\")]\n    outputs = [Output(display_name=\"Заявка\", name=\"rfq\", method=\"ask\")]\n\n    def ask(self) -> Data:\n        bus = _as_dict(self.bus)\n        payload = trace_append({**bus, \"speech\": \"Заявка\"}, \"buyer-agent\", \"Заявка\")\n        return Data(data=payload)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Заявка и встречное в мандате покупателя. Не платит.",
+            "icon": "User",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Atrium · Агент закупки",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "rfq",
+                "display_name": "Заявка",
+                "method": "ask",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "bus"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.atrium___",
+              "code_hash": "661e893e9911",
+              "dependencies": {
+                "total_dependencies": 1,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      },
+      {
+        "id": "atrium_seller-5ce93",
+        "type": "genericNode",
+        "position": {
+          "x": 720,
+          "y": 280
+        },
+        "data": {
+          "id": "atrium_seller-5ce93",
+          "type": "atrium_seller",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "bus": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bus",
+                "value": "",
+                "display_name": "Шина",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Atrium · Агент поставки. Self-contained: Langflow executes this file in isolation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom typing import Any\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, DataInput, MessageTextInput, Output\nfrom lfx.schema.data import Data\nfrom lfx.schema.message import Message\n\n\ndef _as_dict(value: Any) -> dict[str, Any]:\n    if value is None:\n        return {}\n    if isinstance(value, dict):\n        return value\n    data = getattr(value, \"data\", None)\n    return dict(data) if isinstance(data, dict) else {}\n\n\ndef _text(value: Any) -> str:\n    if value is None:\n        return \"\"\n    text = getattr(value, \"text\", None)\n    if isinstance(text, str) and text:\n        return text\n    return str(value)\n\ndef trace_append(payload: dict[str, Any], role: str, act: str) -> dict[str, Any]:\n    data = dict(payload or {})\n    trail = list(data.get(\"trace\") or [])\n    trail.append({\"role\": role, \"act\": act})\n    data[\"trace\"] = trail\n    return data\n\n\ndef parse_need(query: str) -> dict[str, Any]:\n    q = (query or \"\").lower()\n    city = \"Казань\" if \"казан\" in q else \"Москва\" if \"москв\" in q else None\n    qty = 50_000 if \"50\" in q or \"50000\" in q.replace(\" \", \"\") else None\n    budget = 2_100_000 if \"2,1\" in q or \"2.1\" in q or \"млн\" in q else None\n    return {\n        \"query\": query,\n        \"category\": \"Упаковка\" if \"короб\" in q or \"крафт\" in q else None,\n        \"city\": city,\n        \"qty\": qty,\n        \"budget\": budget,\n        \"unit\": \"шт\",\n    }\n\n\ndef match_lots(need: dict[str, Any]) -> list[dict[str, Any]]:\n    qty = int(need.get(\"qty\") or 18_000)\n    return [\n        {\"seller\": \"СеверПак\", \"sku\": \"короб 300×200×150\", \"price\": 42, \"floor\": 38, \"qty\": qty, \"ready_days\": 9},\n        {\"seller\": \"ВолгаКомплект\", \"sku\": \"короб 300×200×150\", \"price\": 44, \"floor\": 40, \"qty\": qty, \"ready_days\": 12},\n    ]\n\n\ndef negotiate(lots: list[dict[str, Any]], budget: float | None) -> dict[str, Any]:\n    if not lots:\n        return {\"status\": \"rejected\", \"reason\": \"нет партий\"}\n    best = min(lots, key=lambda x: x[\"price\"])\n    price = max(float(best[\"floor\"]), float(best[\"price\"]) * 0.97)\n    total = price * int(best[\"qty\"])\n    if budget and total > budget:\n        return {\"status\": \"rejected\", \"reason\": \"бюджет\", \"price\": price, \"total\": total}\n    return {\n        \"status\": \"agreed\",\n        \"seller\": best[\"seller\"],\n        \"price\": round(price, 2),\n        \"qty\": best[\"qty\"],\n        \"total\": round(total, 2),\n        \"floor_ok\": price >= float(best[\"floor\"]),\n    }\n\n\ndef fulfill(deal: dict[str, Any], *, paid: bool) -> dict[str, Any]:\n    if not paid:\n        return {\"status\": \"advance_due\", \"note\": \"склад не едет без аванса\"}\n    return {\n        \"status\": \"shipping\",\n        \"documents\": [\"счёт\", \"ТТН\", \"УПД\"],\n        \"deal\": deal,\n    }\n\n\ndef remedy(kind: str = \"delay_ship\") -> dict[str, Any]:\n    return {\n        \"kind\": kind,\n        \"proposed\": \"довоз через 2 дня, рейтинг не трогаем\",\n        \"rating_hit\": False,\n    }\n\nclass SellerAgent(Component):\n    display_name = \"Atrium · Агент поставки\"\n    description = \"Предложение от лотов. Уступает только до пола маржи.\"\n    icon = \"Package\"\n    name = \"atrium_seller\"\n    inputs = [DataInput(name=\"bus\", display_name=\"Шина\")]\n    outputs = [Output(display_name=\"Предложение\", name=\"offer\", method=\"offer\")]\n\n    def offer(self) -> Data:\n        bus = _as_dict(self.bus)\n        payload = trace_append({**bus, \"speech\": \"Предложение\"}, \"seller-agent\", \"Предложение\")\n        return Data(data=payload)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Предложение от лотов. Уступает только до пола маржи.",
+            "icon": "Package",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Atrium · Агент поставки",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "offer",
+                "display_name": "Предложение",
+                "method": "offer",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "bus"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.atrium___",
+              "code_hash": "312048ed21d2",
+              "dependencies": {
+                "total_dependencies": 1,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      },
+      {
+        "id": "atrium_mandate-b243c",
+        "type": "genericNode",
+        "position": {
+          "x": 960,
+          "y": 164
+        },
+        "data": {
+          "id": "atrium_mandate-b243c",
+          "type": "atrium_mandate",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "bus": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bus",
+                "value": "",
+                "display_name": "Шина",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Atrium · Движок мандата. Self-contained: Langflow executes this file in isolation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom typing import Any\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, DataInput, MessageTextInput, Output\nfrom lfx.schema.data import Data\nfrom lfx.schema.message import Message\n\n\ndef _as_dict(value: Any) -> dict[str, Any]:\n    if value is None:\n        return {}\n    if isinstance(value, dict):\n        return value\n    data = getattr(value, \"data\", None)\n    return dict(data) if isinstance(data, dict) else {}\n\n\ndef _text(value: Any) -> str:\n    if value is None:\n        return \"\"\n    text = getattr(value, \"text\", None)\n    if isinstance(text, str) and text:\n        return text\n    return str(value)\n\ndef trace_append(payload: dict[str, Any], role: str, act: str) -> dict[str, Any]:\n    data = dict(payload or {})\n    trail = list(data.get(\"trace\") or [])\n    trail.append({\"role\": role, \"act\": act})\n    data[\"trace\"] = trail\n    return data\n\n\ndef parse_need(query: str) -> dict[str, Any]:\n    q = (query or \"\").lower()\n    city = \"Казань\" if \"казан\" in q else \"Москва\" if \"москв\" in q else None\n    qty = 50_000 if \"50\" in q or \"50000\" in q.replace(\" \", \"\") else None\n    budget = 2_100_000 if \"2,1\" in q or \"2.1\" in q or \"млн\" in q else None\n    return {\n        \"query\": query,\n        \"category\": \"Упаковка\" if \"короб\" in q or \"крафт\" in q else None,\n        \"city\": city,\n        \"qty\": qty,\n        \"budget\": budget,\n        \"unit\": \"шт\",\n    }\n\n\ndef match_lots(need: dict[str, Any]) -> list[dict[str, Any]]:\n    qty = int(need.get(\"qty\") or 18_000)\n    return [\n        {\"seller\": \"СеверПак\", \"sku\": \"короб 300×200×150\", \"price\": 42, \"floor\": 38, \"qty\": qty, \"ready_days\": 9},\n        {\"seller\": \"ВолгаКомплект\", \"sku\": \"короб 300×200×150\", \"price\": 44, \"floor\": 40, \"qty\": qty, \"ready_days\": 12},\n    ]\n\n\ndef negotiate(lots: list[dict[str, Any]], budget: float | None) -> dict[str, Any]:\n    if not lots:\n        return {\"status\": \"rejected\", \"reason\": \"нет партий\"}\n    best = min(lots, key=lambda x: x[\"price\"])\n    price = max(float(best[\"floor\"]), float(best[\"price\"]) * 0.97)\n    total = price * int(best[\"qty\"])\n    if budget and total > budget:\n        return {\"status\": \"rejected\", \"reason\": \"бюджет\", \"price\": price, \"total\": total}\n    return {\n        \"status\": \"agreed\",\n        \"seller\": best[\"seller\"],\n        \"price\": round(price, 2),\n        \"qty\": best[\"qty\"],\n        \"total\": round(total, 2),\n        \"floor_ok\": price >= float(best[\"floor\"]),\n    }\n\n\ndef fulfill(deal: dict[str, Any], *, paid: bool) -> dict[str, Any]:\n    if not paid:\n        return {\"status\": \"advance_due\", \"note\": \"склад не едет без аванса\"}\n    return {\n        \"status\": \"shipping\",\n        \"documents\": [\"счёт\", \"ТТН\", \"УПД\"],\n        \"deal\": deal,\n    }\n\n\ndef remedy(kind: str = \"delay_ship\") -> dict[str, Any]:\n    return {\n        \"kind\": kind,\n        \"proposed\": \"довоз через 2 дня, рейтинг не трогаем\",\n        \"rating_hit\": False,\n    }\n\nclass Mandate(Component):\n    display_name = \"Atrium · Движок мандата\"\n    description = \"Цена, количество, статус. LLM сюда не ходит.\"\n    icon = \"Gauge\"\n    name = \"atrium_mandate\"\n    inputs = [DataInput(name=\"bus\", display_name=\"Шина\")]\n    outputs = [Output(display_name=\"Сделка\", name=\"deal\", method=\"settle\")]\n\n    def settle(self) -> Data:\n        bus = _as_dict(self.bus)\n        need = bus.get(\"need\") or {}\n        deal = negotiate(bus.get(\"lots\") or [], need.get(\"budget\"))\n        payload = trace_append({**bus, \"deal\": deal}, \"mandate\", \"Согласие / отказ\")\n        return Data(data=payload)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Цена, количество, статус. LLM сюда не ходит.",
+            "icon": "Gauge",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Atrium · Движок мандата",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "deal",
+                "display_name": "Сделка",
+                "method": "settle",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "bus"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.atrium___",
+              "code_hash": "dbccbc3b8c42",
+              "dependencies": {
+                "total_dependencies": 1,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      },
+      {
+        "id": "atrium_human-aefd1",
+        "type": "genericNode",
+        "position": {
+          "x": 1200,
+          "y": 48
+        },
+        "data": {
+          "id": "atrium_human-aefd1",
+          "type": "atrium_human",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "bus": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bus",
+                "value": "",
+                "display_name": "Шина",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "approve": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "approve",
+                "value": true,
+                "display_name": "Утвердить / оплатить",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Atrium · Человек. Self-contained: Langflow executes this file in isolation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom typing import Any\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, DataInput, MessageTextInput, Output\nfrom lfx.schema.data import Data\nfrom lfx.schema.message import Message\n\n\ndef _as_dict(value: Any) -> dict[str, Any]:\n    if value is None:\n        return {}\n    if isinstance(value, dict):\n        return value\n    data = getattr(value, \"data\", None)\n    return dict(data) if isinstance(data, dict) else {}\n\n\ndef _text(value: Any) -> str:\n    if value is None:\n        return \"\"\n    text = getattr(value, \"text\", None)\n    if isinstance(text, str) and text:\n        return text\n    return str(value)\n\ndef trace_append(payload: dict[str, Any], role: str, act: str) -> dict[str, Any]:\n    data = dict(payload or {})\n    trail = list(data.get(\"trace\") or [])\n    trail.append({\"role\": role, \"act\": act})\n    data[\"trace\"] = trail\n    return data\n\n\ndef parse_need(query: str) -> dict[str, Any]:\n    q = (query or \"\").lower()\n    city = \"Казань\" if \"казан\" in q else \"Москва\" if \"москв\" in q else None\n    qty = 50_000 if \"50\" in q or \"50000\" in q.replace(\" \", \"\") else None\n    budget = 2_100_000 if \"2,1\" in q or \"2.1\" in q or \"млн\" in q else None\n    return {\n        \"query\": query,\n        \"category\": \"Упаковка\" if \"короб\" in q or \"крафт\" in q else None,\n        \"city\": city,\n        \"qty\": qty,\n        \"budget\": budget,\n        \"unit\": \"шт\",\n    }\n\n\ndef match_lots(need: dict[str, Any]) -> list[dict[str, Any]]:\n    qty = int(need.get(\"qty\") or 18_000)\n    return [\n        {\"seller\": \"СеверПак\", \"sku\": \"короб 300×200×150\", \"price\": 42, \"floor\": 38, \"qty\": qty, \"ready_days\": 9},\n        {\"seller\": \"ВолгаКомплект\", \"sku\": \"короб 300×200×150\", \"price\": 44, \"floor\": 40, \"qty\": qty, \"ready_days\": 12},\n    ]\n\n\ndef negotiate(lots: list[dict[str, Any]], budget: float | None) -> dict[str, Any]:\n    if not lots:\n        return {\"status\": \"rejected\", \"reason\": \"нет партий\"}\n    best = min(lots, key=lambda x: x[\"price\"])\n    price = max(float(best[\"floor\"]), float(best[\"price\"]) * 0.97)\n    total = price * int(best[\"qty\"])\n    if budget and total > budget:\n        return {\"status\": \"rejected\", \"reason\": \"бюджет\", \"price\": price, \"total\": total}\n    return {\n        \"status\": \"agreed\",\n        \"seller\": best[\"seller\"],\n        \"price\": round(price, 2),\n        \"qty\": best[\"qty\"],\n        \"total\": round(total, 2),\n        \"floor_ok\": price >= float(best[\"floor\"]),\n    }\n\n\ndef fulfill(deal: dict[str, Any], *, paid: bool) -> dict[str, Any]:\n    if not paid:\n        return {\"status\": \"advance_due\", \"note\": \"склад не едет без аванса\"}\n    return {\n        \"status\": \"shipping\",\n        \"documents\": [\"счёт\", \"ТТН\", \"УПД\"],\n        \"deal\": deal,\n    }\n\n\ndef remedy(kind: str = \"delay_ship\") -> dict[str, Any]:\n    return {\n        \"kind\": kind,\n        \"proposed\": \"довоз через 2 дня, рейтинг не трогаем\",\n        \"rating_hit\": False,\n    }\n\nclass HumanGate(Component):\n    display_name = \"Atrium · Человек\"\n    description = \"Утвердить, оплатить, принять. Единственная необратимая подпись.\"\n    icon = \"Shield\"\n    name = \"atrium_human\"\n    inputs = [\n        DataInput(name=\"bus\", display_name=\"Шина\"),\n        BoolInput(name=\"approve\", display_name=\"Утвердить / оплатить\", value=True),\n    ]\n    outputs = [Output(display_name=\"Подпись\", name=\"signed\", method=\"sign\")]\n\n    def sign(self) -> Data:\n        bus = _as_dict(self.bus)\n        ok = bool(self.approve)\n        payload = trace_append(\n            {**bus, \"human_ok\": ok},\n            \"human\",\n            \"Утверждение / оплата / приёмка\" if ok else \"отказ человека\",\n        )\n        return Data(data=payload)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Утвердить, оплатить, принять. Единственная необратимая подпись.",
+            "icon": "Shield",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Atrium · Человек",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "signed",
+                "display_name": "Подпись",
+                "method": "sign",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "bus",
+              "approve"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.atrium__",
+              "code_hash": "6988225bfc41",
+              "dependencies": {
+                "total_dependencies": 1,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      },
+      {
+        "id": "atrium_fulfillment-96e63",
+        "type": "genericNode",
+        "position": {
+          "x": 1200,
+          "y": 220
+        },
+        "data": {
+          "id": "atrium_fulfillment-96e63",
+          "type": "atrium_fulfillment",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "bus": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bus",
+                "value": "",
+                "display_name": "Шина",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Atrium · Исполнение. Self-contained: Langflow executes this file in isolation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom typing import Any\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, DataInput, MessageTextInput, Output\nfrom lfx.schema.data import Data\nfrom lfx.schema.message import Message\n\n\ndef _as_dict(value: Any) -> dict[str, Any]:\n    if value is None:\n        return {}\n    if isinstance(value, dict):\n        return value\n    data = getattr(value, \"data\", None)\n    return dict(data) if isinstance(data, dict) else {}\n\n\ndef _text(value: Any) -> str:\n    if value is None:\n        return \"\"\n    text = getattr(value, \"text\", None)\n    if isinstance(text, str) and text:\n        return text\n    return str(value)\n\ndef trace_append(payload: dict[str, Any], role: str, act: str) -> dict[str, Any]:\n    data = dict(payload or {})\n    trail = list(data.get(\"trace\") or [])\n    trail.append({\"role\": role, \"act\": act})\n    data[\"trace\"] = trail\n    return data\n\n\ndef parse_need(query: str) -> dict[str, Any]:\n    q = (query or \"\").lower()\n    city = \"Казань\" if \"казан\" in q else \"Москва\" if \"москв\" in q else None\n    qty = 50_000 if \"50\" in q or \"50000\" in q.replace(\" \", \"\") else None\n    budget = 2_100_000 if \"2,1\" in q or \"2.1\" in q or \"млн\" in q else None\n    return {\n        \"query\": query,\n        \"category\": \"Упаковка\" if \"короб\" in q or \"крафт\" in q else None,\n        \"city\": city,\n        \"qty\": qty,\n        \"budget\": budget,\n        \"unit\": \"шт\",\n    }\n\n\ndef match_lots(need: dict[str, Any]) -> list[dict[str, Any]]:\n    qty = int(need.get(\"qty\") or 18_000)\n    return [\n        {\"seller\": \"СеверПак\", \"sku\": \"короб 300×200×150\", \"price\": 42, \"floor\": 38, \"qty\": qty, \"ready_days\": 9},\n        {\"seller\": \"ВолгаКомплект\", \"sku\": \"короб 300×200×150\", \"price\": 44, \"floor\": 40, \"qty\": qty, \"ready_days\": 12},\n    ]\n\n\ndef negotiate(lots: list[dict[str, Any]], budget: float | None) -> dict[str, Any]:\n    if not lots:\n        return {\"status\": \"rejected\", \"reason\": \"нет партий\"}\n    best = min(lots, key=lambda x: x[\"price\"])\n    price = max(float(best[\"floor\"]), float(best[\"price\"]) * 0.97)\n    total = price * int(best[\"qty\"])\n    if budget and total > budget:\n        return {\"status\": \"rejected\", \"reason\": \"бюджет\", \"price\": price, \"total\": total}\n    return {\n        \"status\": \"agreed\",\n        \"seller\": best[\"seller\"],\n        \"price\": round(price, 2),\n        \"qty\": best[\"qty\"],\n        \"total\": round(total, 2),\n        \"floor_ok\": price >= float(best[\"floor\"]),\n    }\n\n\ndef fulfill(deal: dict[str, Any], *, paid: bool) -> dict[str, Any]:\n    if not paid:\n        return {\"status\": \"advance_due\", \"note\": \"склад не едет без аванса\"}\n    return {\n        \"status\": \"shipping\",\n        \"documents\": [\"счёт\", \"ТТН\", \"УПД\"],\n        \"deal\": deal,\n    }\n\n\ndef remedy(kind: str = \"delay_ship\") -> dict[str, Any]:\n    return {\n        \"kind\": kind,\n        \"proposed\": \"довоз через 2 дня, рейтинг не трогаем\",\n        \"rating_hit\": False,\n    }\n\nclass Fulfillment(Component):\n    display_name = \"Atrium · Исполнение\"\n    description = \"Счёт, резерв, ТТН, УПД. Склад не едет без аванса.\"\n    icon = \"Truck\"\n    name = \"atrium_fulfillment\"\n    inputs = [DataInput(name=\"bus\", display_name=\"Шина\")]\n    outputs = [Output(display_name=\"Заказ\", name=\"order\", method=\"ship\")]\n\n    def ship(self) -> Data:\n        bus = _as_dict(self.bus)\n        order = fulfill(bus.get(\"deal\") or {}, paid=bool(bus.get(\"human_ok\")))\n        payload = trace_append({**bus, \"order\": order}, \"fulfillment\", \"заказ\")\n        return Data(data=payload)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Счёт, резерв, ТТН, УПД. Склад не едет без аванса.",
+            "icon": "Truck",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Atrium · Исполнение",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "order",
+                "display_name": "Заказ",
+                "method": "ship",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "bus"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.atrium__",
+              "code_hash": "3df930e4aded",
+              "dependencies": {
+                "total_dependencies": 1,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      },
+      {
+        "id": "atrium_ops-3d4a9",
+        "type": "genericNode",
+        "position": {
+          "x": 960,
+          "y": 400
+        },
+        "data": {
+          "id": "atrium_ops-3d4a9",
+          "type": "atrium_ops",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "bus": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bus",
+                "value": "",
+                "display_name": "Шина",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Atrium · Инциденты. Self-contained: Langflow executes this file in isolation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom typing import Any\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, DataInput, MessageTextInput, Output\nfrom lfx.schema.data import Data\nfrom lfx.schema.message import Message\n\n\ndef _as_dict(value: Any) -> dict[str, Any]:\n    if value is None:\n        return {}\n    if isinstance(value, dict):\n        return value\n    data = getattr(value, \"data\", None)\n    return dict(data) if isinstance(data, dict) else {}\n\n\ndef _text(value: Any) -> str:\n    if value is None:\n        return \"\"\n    text = getattr(value, \"text\", None)\n    if isinstance(text, str) and text:\n        return text\n    return str(value)\n\ndef trace_append(payload: dict[str, Any], role: str, act: str) -> dict[str, Any]:\n    data = dict(payload or {})\n    trail = list(data.get(\"trace\") or [])\n    trail.append({\"role\": role, \"act\": act})\n    data[\"trace\"] = trail\n    return data\n\n\ndef parse_need(query: str) -> dict[str, Any]:\n    q = (query or \"\").lower()\n    city = \"Казань\" if \"казан\" in q else \"Москва\" if \"москв\" in q else None\n    qty = 50_000 if \"50\" in q or \"50000\" in q.replace(\" \", \"\") else None\n    budget = 2_100_000 if \"2,1\" in q or \"2.1\" in q or \"млн\" in q else None\n    return {\n        \"query\": query,\n        \"category\": \"Упаковка\" if \"короб\" in q or \"крафт\" in q else None,\n        \"city\": city,\n        \"qty\": qty,\n        \"budget\": budget,\n        \"unit\": \"шт\",\n    }\n\n\ndef match_lots(need: dict[str, Any]) -> list[dict[str, Any]]:\n    qty = int(need.get(\"qty\") or 18_000)\n    return [\n        {\"seller\": \"СеверПак\", \"sku\": \"короб 300×200×150\", \"price\": 42, \"floor\": 38, \"qty\": qty, \"ready_days\": 9},\n        {\"seller\": \"ВолгаКомплект\", \"sku\": \"короб 300×200×150\", \"price\": 44, \"floor\": 40, \"qty\": qty, \"ready_days\": 12},\n    ]\n\n\ndef negotiate(lots: list[dict[str, Any]], budget: float | None) -> dict[str, Any]:\n    if not lots:\n        return {\"status\": \"rejected\", \"reason\": \"нет партий\"}\n    best = min(lots, key=lambda x: x[\"price\"])\n    price = max(float(best[\"floor\"]), float(best[\"price\"]) * 0.97)\n    total = price * int(best[\"qty\"])\n    if budget and total > budget:\n        return {\"status\": \"rejected\", \"reason\": \"бюджет\", \"price\": price, \"total\": total}\n    return {\n        \"status\": \"agreed\",\n        \"seller\": best[\"seller\"],\n        \"price\": round(price, 2),\n        \"qty\": best[\"qty\"],\n        \"total\": round(total, 2),\n        \"floor_ok\": price >= float(best[\"floor\"]),\n    }\n\n\ndef fulfill(deal: dict[str, Any], *, paid: bool) -> dict[str, Any]:\n    if not paid:\n        return {\"status\": \"advance_due\", \"note\": \"склад не едет без аванса\"}\n    return {\n        \"status\": \"shipping\",\n        \"documents\": [\"счёт\", \"ТТН\", \"УПД\"],\n        \"deal\": deal,\n    }\n\n\ndef remedy(kind: str = \"delay_ship\") -> dict[str, Any]:\n    return {\n        \"kind\": kind,\n        \"proposed\": \"довоз через 2 дня, рейтинг не трогаем\",\n        \"rating_hit\": False,\n    }\n\nclass Ops(Component):\n    display_name = \"Atrium · Инциденты\"\n    description = \"Обход по факту срыва. Рейтинг не трогает.\"\n    icon = \"Unplug\"\n    name = \"atrium_ops\"\n    inputs = [DataInput(name=\"bus\", display_name=\"Шина\")]\n    outputs = [Output(display_name=\"Обход\", name=\"remedy\", method=\"propose\")]\n\n    def propose(self) -> Data:\n        bus = _as_dict(self.bus)\n        payload = trace_append({**bus, \"incident\": remedy()}, \"ops\", \"Претензия / обход\")\n        return Data(data=payload)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Обход по факту срыва. Рейтинг не трогает.",
+            "icon": "Unplug",
+            "base_classes": [
+              "JSON"
+            ],
+            "display_name": "Atrium · Инциденты",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "remedy",
+                "display_name": "Обход",
+                "method": "propose",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "bus"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.atrium__",
+              "code_hash": "86a7518309ad",
+              "dependencies": {
+                "total_dependencies": 1,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      },
+      {
+        "id": "atrium_platform-8ed2e",
+        "type": "genericNode",
+        "position": {
+          "x": 1200,
+          "y": 400
+        },
+        "data": {
+          "id": "atrium_platform-8ed2e",
+          "type": "atrium_platform",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "bus": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bus",
+                "value": "",
+                "display_name": "Шина",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Atrium · Арбитр. Self-contained: Langflow executes this file in isolation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom typing import Any\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, DataInput, MessageTextInput, Output\nfrom lfx.schema.data import Data\nfrom lfx.schema.message import Message\n\n\ndef _as_dict(value: Any) -> dict[str, Any]:\n    if value is None:\n        return {}\n    if isinstance(value, dict):\n        return value\n    data = getattr(value, \"data\", None)\n    return dict(data) if isinstance(data, dict) else {}\n\n\ndef _text(value: Any) -> str:\n    if value is None:\n        return \"\"\n    text = getattr(value, \"text\", None)\n    if isinstance(text, str) and text:\n        return text\n    return str(value)\n\ndef trace_append(payload: dict[str, Any], role: str, act: str) -> dict[str, Any]:\n    data = dict(payload or {})\n    trail = list(data.get(\"trace\") or [])\n    trail.append({\"role\": role, \"act\": act})\n    data[\"trace\"] = trail\n    return data\n\n\ndef parse_need(query: str) -> dict[str, Any]:\n    q = (query or \"\").lower()\n    city = \"Казань\" if \"казан\" in q else \"Москва\" if \"москв\" in q else None\n    qty = 50_000 if \"50\" in q or \"50000\" in q.replace(\" \", \"\") else None\n    budget = 2_100_000 if \"2,1\" in q or \"2.1\" in q or \"млн\" in q else None\n    return {\n        \"query\": query,\n        \"category\": \"Упаковка\" if \"короб\" in q or \"крафт\" in q else None,\n        \"city\": city,\n        \"qty\": qty,\n        \"budget\": budget,\n        \"unit\": \"шт\",\n    }\n\n\ndef match_lots(need: dict[str, Any]) -> list[dict[str, Any]]:\n    qty = int(need.get(\"qty\") or 18_000)\n    return [\n        {\"seller\": \"СеверПак\", \"sku\": \"короб 300×200×150\", \"price\": 42, \"floor\": 38, \"qty\": qty, \"ready_days\": 9},\n        {\"seller\": \"ВолгаКомплект\", \"sku\": \"короб 300×200×150\", \"price\": 44, \"floor\": 40, \"qty\": qty, \"ready_days\": 12},\n    ]\n\n\ndef negotiate(lots: list[dict[str, Any]], budget: float | None) -> dict[str, Any]:\n    if not lots:\n        return {\"status\": \"rejected\", \"reason\": \"нет партий\"}\n    best = min(lots, key=lambda x: x[\"price\"])\n    price = max(float(best[\"floor\"]), float(best[\"price\"]) * 0.97)\n    total = price * int(best[\"qty\"])\n    if budget and total > budget:\n        return {\"status\": \"rejected\", \"reason\": \"бюджет\", \"price\": price, \"total\": total}\n    return {\n        \"status\": \"agreed\",\n        \"seller\": best[\"seller\"],\n        \"price\": round(price, 2),\n        \"qty\": best[\"qty\"],\n        \"total\": round(total, 2),\n        \"floor_ok\": price >= float(best[\"floor\"]),\n    }\n\n\ndef fulfill(deal: dict[str, Any], *, paid: bool) -> dict[str, Any]:\n    if not paid:\n        return {\"status\": \"advance_due\", \"note\": \"склад не едет без аванса\"}\n    return {\n        \"status\": \"shipping\",\n        \"documents\": [\"счёт\", \"ТТН\", \"УПД\"],\n        \"deal\": deal,\n    }\n\n\ndef remedy(kind: str = \"delay_ship\") -> dict[str, Any]:\n    return {\n        \"kind\": kind,\n        \"proposed\": \"довоз через 2 дня, рейтинг не трогаем\",\n        \"rating_hit\": False,\n    }\n\nclass PlatformArbiter(Component):\n    display_name = \"Atrium · Арбитр\"\n    description = \"Решение по документам. Только тогда бьёт рейтинг.\"\n    icon = \"Scale\"\n    name = \"atrium_platform\"\n    inputs = [\n        DataInput(name=\"bus\", display_name=\"Шина\"),\n        BoolInput(name=\"escalate\", display_name=\"Эскалация\", value=False),\n    ]\n    outputs = [\n        Output(display_name=\"Решение\", name=\"ruling\", method=\"rule\"),\n        Output(display_name=\"Для Ollama\", name=\"message\", method=\"as_message\", types=[\"Message\"]),\n    ]\n\n    def _payload(self) -> dict:\n        bus = _as_dict(self.bus)\n        escalate = bool(self.escalate)\n        ruling = {\"status\": \"arbitration\" if escalate else \"accepted_remedy\", \"rating_hit\": escalate}\n        return trace_append({**bus, \"ruling\": ruling}, \"platform\", \"Эскалация / решение\")\n\n    def rule(self) -> Data:\n        return Data(data=self._payload())\n\n    def as_message(self) -> Message:\n        bus = self._payload()\n        lines = [f\"{row.get('role')}: {row.get('act')}\" for row in bus.get(\"trace\") or []]\n        body = \"\\n\".join(lines) or \"шина пуста\"\n        extra = {k: bus.get(k) for k in (\"deal\", \"order\", \"incident\", \"ruling\") if bus.get(k)}\n        if extra:\n            body = body + \"\\n\\n\" + json.dumps(extra, ensure_ascii=False, indent=2)\n        return Message(text=body)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "escalate": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "escalate",
+                "value": false,
+                "display_name": "Эскалация",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Решение по документам. Только тогда бьёт рейтинг.",
+            "icon": "Scale",
+            "base_classes": [
+              "JSON",
+              "Message"
+            ],
+            "display_name": "Atrium · Арбитр",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "ruling",
+                "display_name": "Решение",
+                "method": "rule",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Для Ollama",
+                "method": "as_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "bus",
+              "escalate"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.atrium__",
+              "code_hash": "ce1244ecfc22",
+              "dependencies": {
+                "total_dependencies": 1,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      },
+      {
+        "id": "atrium_qwen-4fc79",
+        "type": "genericNode",
+        "position": {
+          "x": 1440,
+          "y": 220
+        },
+        "data": {
+          "id": "atrium_qwen-4fc79",
+          "type": "atrium_qwen",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "bus": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "trace_as_input": true,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "bus",
+                "value": "",
+                "display_name": "Шина",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "JSONInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Atrium · Qwen (Ollama). Self-contained: Langflow executes this file in isolation.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport urllib.error\nimport urllib.request\nfrom typing import Any\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import DataInput, MessageTextInput, Output\nfrom lfx.schema.message import Message\n\nOLLAMA_URL = \"http://127.0.0.1:11434/api/chat\"\nDEFAULT_MODEL = \"qwen2.5:14b\"\nSYSTEM = (\n    \"Ты формулируешь итог шины Atrium для человека. \"\n    \"Не меняй цены, количества, статусы и имена поставщиков. \"\n    \"Кратко перескажи trace и сделку по-русски.\"\n)\n\n\ndef _as_dict(value: Any) -> dict[str, Any]:\n    if value is None:\n        return {}\n    if isinstance(value, dict):\n        return value\n    data = getattr(value, \"data\", None)\n    return dict(data) if isinstance(data, dict) else {}\n\n\ndef _prompt(bus: dict[str, Any]) -> str:\n    lines = [f\"{row.get('role')}: {row.get('act')}\" for row in bus.get(\"trace\") or []]\n    body = \"\\n\".join(lines) or \"шина пуста\"\n    extra = {k: bus.get(k) for k in (\"deal\", \"order\", \"incident\", \"ruling\") if bus.get(k)}\n    if extra:\n        body = body + \"\\n\\n\" + json.dumps(extra, ensure_ascii=False, indent=2)\n    return body\n\n\ndef _chat(model: str, prompt: str) -> str:\n    payload = json.dumps(\n        {\n            \"model\": model,\n            \"stream\": False,\n            \"options\": {\"temperature\": 0.3, \"num_ctx\": 4096},\n            \"messages\": [\n                {\"role\": \"system\", \"content\": SYSTEM},\n                {\"role\": \"user\", \"content\": prompt},\n            ],\n        }\n    ).encode()\n    req = urllib.request.Request(\n        OLLAMA_URL,\n        data=payload,\n        headers={\"Content-Type\": \"application/json\"},\n        method=\"POST\",\n    )\n    with urllib.request.urlopen(req, timeout=180) as resp:\n        data = json.loads(resp.read().decode())\n    return ((data.get(\"message\") or {}).get(\"content\") or \"\").strip()\n\n\nclass AtriumQwen(Component):\n    display_name = \"Atrium · Qwen\"\n    description = \"Озвучивает итог шины через Ollama qwen2.5:14b. Числа не меняет.\"\n    icon = \"FileText\"\n    name = \"atrium_qwen\"\n    inputs = [\n        DataInput(name=\"bus\", display_name=\"Шина\"),\n        MessageTextInput(name=\"model\", display_name=\"Модель\", value=DEFAULT_MODEL),\n    ]\n    outputs = [Output(display_name=\"Ответ\", name=\"message\", method=\"speak\")]\n\n    def speak(self) -> Message:\n        bus = _as_dict(self.bus)\n        prompt = _prompt(bus)\n        model = (getattr(self, \"model\", None) or DEFAULT_MODEL).strip() or DEFAULT_MODEL\n        try:\n            text = _chat(model, prompt)\n        except urllib.error.URLError as exc:\n            text = f\"Ollama не ответила ({OLLAMA_URL}): {exc}\"\n        except TimeoutError:\n            text = f\"Ollama не ответила за 180с ({model})\"\n        except Exception as exc:  # noqa: BLE001 — Playground must still return a Message\n            text = f\"Ollama ошибка: {exc}\"\n        return Message(text=text or prompt)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "model": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "model",
+                "value": "qwen2.5:14b",
+                "display_name": "Модель",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              }
+            },
+            "description": "Озвучивает итог шины через Ollama qwen2.5:14b. Числа не меняет.",
+            "icon": "FileText",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Atrium · Qwen",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Ответ",
+                "method": "speak",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "bus",
+              "model"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.atrium__qwen",
+              "code_hash": "5f18dc19a613",
+              "dependencies": {
+                "total_dependencies": 1,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      },
+      {
+        "id": "ChatInput-atrium",
+        "type": "genericNode",
+        "position": {
+          "x": 20,
+          "y": 48
+        },
+        "data": {
+          "id": "ChatInput-atrium",
+          "type": "ChatInput",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "files": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "file_path": "",
+                "fileTypes": [
+                  "csv",
+                  "json",
+                  "pdf",
+                  "txt",
+                  "md",
+                  "mdx",
+                  "yaml",
+                  "yml",
+                  "xml",
+                  "html",
+                  "htm",
+                  "docx",
+                  "py",
+                  "sh",
+                  "sql",
+                  "js",
+                  "ts",
+                  "tsx",
+                  "jpg",
+                  "jpeg",
+                  "png",
+                  "bmp",
+                  "image"
+                ],
+                "temp_file": true,
+                "list": true,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "files",
+                "value": "",
+                "display_name": "Files",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Files to be sent with the message.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "file",
+                "_input_type": "FileInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from lfx.base.data.utils import IMG_FILE_TYPES, TEXT_FILE_TYPES\nfrom lfx.base.io.chat import ChatComponent\nfrom lfx.inputs.inputs import BoolInput\nfrom lfx.io import (\n    DropdownInput,\n    FileInput,\n    MessageTextInput,\n    MultilineInput,\n    Output,\n)\nfrom lfx.schema.image import get_file_paths\nfrom lfx.schema.message import Message\nfrom lfx.services.deps import get_settings_service\nfrom lfx.utils.constants import (\n    MESSAGE_SENDER_AI,\n    MESSAGE_SENDER_NAME_USER,\n    MESSAGE_SENDER_USER,\n)\nfrom lfx.utils.file_path_security import (\n    component_file_access_scopes,\n    enforce_local_file_access,\n    is_local_file_access_restricted,\n)\n\n\nclass ChatInput(ChatComponent):\n    display_name = \"Chat Input\"\n    description = \"Get chat inputs from the Playground.\"\n    documentation: str = \"https://docs.langflow.org/chat-input-and-output\"\n    icon = \"MessagesSquare\"\n    name = \"ChatInput\"\n    minimized = True\n\n    inputs = [\n        MultilineInput(\n            name=\"input_value\",\n            display_name=\"Input Text\",\n            value=\"\",\n            info=\"Message to be passed as input.\",\n            input_types=[],\n        ),\n        BoolInput(\n            name=\"should_store_message\",\n            display_name=\"Store Messages\",\n            info=\"Store the message in the history.\",\n            value=True,\n            advanced=True,\n        ),\n        DropdownInput(\n            name=\"sender\",\n            display_name=\"Sender Type\",\n            options=[MESSAGE_SENDER_AI, MESSAGE_SENDER_USER],\n            value=MESSAGE_SENDER_USER,\n            info=\"Type of sender.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"sender_name\",\n            display_name=\"Sender Name\",\n            info=\"Name of the sender.\",\n            value=MESSAGE_SENDER_NAME_USER,\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"session_id\",\n            display_name=\"Session ID\",\n            info=\"The session ID of the chat. If empty, the current session ID parameter will be used.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"context_id\",\n            display_name=\"Context ID\",\n            info=\"The context ID of the chat. Adds an extra layer to the local memory.\",\n            value=\"\",\n            advanced=True,\n        ),\n        FileInput(\n            name=\"files\",\n            display_name=\"Files\",\n            file_types=TEXT_FILE_TYPES + IMG_FILE_TYPES,\n            info=\"Files to be sent with the message.\",\n            advanced=True,\n            is_list=True,\n            temp_file=True,\n        ),\n    ]\n    outputs = [\n        Output(display_name=\"Chat Message\", name=\"message\", method=\"message_response\"),\n    ]\n\n    async def message_response(self) -> Message:\n        # Ensure files is a list and filter out empty/None values\n        files = self.files if self.files else []\n        if files and not isinstance(files, list):\n            files = [files]\n        # Filter out None/empty values\n        files = [f for f in files if f is not None and f != \"\"]\n\n        # Build endpoints inject caller-controlled file references directly into\n        # ChatInput. Resolve and validate local references before the Message can\n        # later read them while constructing model attachment content.\n        if files:\n            settings_service = get_settings_service()\n            storage_type = getattr(getattr(settings_service, \"settings\", None), \"storage_type\", \"local\")\n            # The storage factory falls back to local storage for unsupported\n            # values, so only the explicitly configured S3 backend may bypass\n            # filesystem containment.\n            if str(storage_type).lower() != \"s3\" and is_local_file_access_restricted():\n                scope_ids = list(component_file_access_scopes(self))\n                # Public executions replace graph.flow_id with a per-visitor\n                # virtual ID. Only the server-populated source provenance may\n                # restore the already-validated public attachment namespace.\n                source_flow_id = getattr(self.graph, \"source_flow_id\", None)\n                if source_flow_id:\n                    scope_ids.append(source_flow_id)\n                for file_path in get_file_paths(files):\n                    enforce_local_file_access(file_path, scope_ids=scope_ids)\n\n        session_id = self.session_id or self.graph.session_id or \"\"\n        message = await Message.create(\n            text=self.input_value,\n            sender=self.sender,\n            sender_name=self.sender_name,\n            session_id=session_id,\n            context_id=self.context_id,\n            files=files,\n        )\n        if session_id and isinstance(message, Message) and self.should_store_message:\n            stored_message = await self.send_message(\n                message,\n            )\n            self.message.value = stored_message\n            message = stored_message\n\n        self.status = message\n        return message\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_id",
+                "value": "",
+                "display_name": "Context ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The context ID of the chat. Adds an extra layer to the local memory.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "input_value": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "multiline": true,
+                "ai_enabled": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": "",
+                "display_name": "Input Text",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [],
+                "dynamic": false,
+                "info": "Message to be passed as input.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "copy_field": false,
+                "password": false,
+                "type": "str",
+                "_input_type": "MultilineInput"
+              },
+              "sender": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "Machine",
+                  "User"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender",
+                "value": "User",
+                "display_name": "Sender Type",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Type of sender.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "sender_name": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender_name",
+                "value": "User",
+                "display_name": "Sender Name",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Name of the sender.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "session_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "session_id",
+                "value": "",
+                "display_name": "Session ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The session ID of the chat. If empty, the current session ID parameter will be used.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "should_store_message": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "should_store_message",
+                "value": true,
+                "display_name": "Store Messages",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Store the message in the history.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Get chat inputs from the Playground.",
+            "icon": "MessagesSquare",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Chat Input",
+            "documentation": "https://docs.langflow.org/chat-input-and-output",
+            "minimized": true,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Chat Message",
+                "method": "message_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "input_value",
+              "should_store_message",
+              "sender",
+              "sender_name",
+              "session_id",
+              "context_id",
+              "files"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.chat_input",
+              "code_hash": "45974e6b1909",
+              "dependencies": {
+                "total_dependencies": 1,
+                "dependencies": [
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      },
+      {
+        "id": "ChatOutput-atrium",
+        "type": "genericNode",
+        "position": {
+          "x": 1720,
+          "y": 220
+        },
+        "data": {
+          "id": "ChatOutput-atrium",
+          "type": "ChatOutput",
+          "node": {
+            "template": {
+              "_type": "Component",
+              "input_value": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": "",
+                "display_name": "Inputs",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON",
+                  "DataFrame",
+                  "Table",
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Message to be passed as output.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "clean_data": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "clean_data",
+                "value": true,
+                "display_name": "Basic Clean Data",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Whether to clean data before converting to string.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from collections.abc import Generator\nfrom typing import Any\n\nimport orjson\nfrom fastapi.encoders import jsonable_encoder\n\nfrom lfx.base.io.chat import ChatComponent\nfrom lfx.helpers.data import safe_convert\nfrom lfx.inputs.inputs import BoolInput, DropdownInput, HandleInput, MessageTextInput\nfrom lfx.schema.data import Data\nfrom lfx.schema.dataframe import DataFrame\nfrom lfx.schema.message import Message\nfrom lfx.schema.properties import Source\nfrom lfx.template.field.base import Output\nfrom lfx.utils.constants import (\n    MESSAGE_SENDER_AI,\n    MESSAGE_SENDER_NAME_AI,\n    MESSAGE_SENDER_USER,\n)\n\n\nclass ChatOutput(ChatComponent):\n    display_name = \"Chat Output\"\n    description = \"Display a chat message in the Playground.\"\n    documentation: str = \"https://docs.langflow.org/chat-input-and-output\"\n    icon = \"MessagesSquare\"\n    name = \"ChatOutput\"\n    minimized = True\n\n    inputs = [\n        HandleInput(\n            name=\"input_value\",\n            display_name=\"Inputs\",\n            info=\"Message to be passed as output.\",\n            input_types=[\"Data\", \"JSON\", \"DataFrame\", \"Table\", \"Message\"],\n            required=True,\n        ),\n        BoolInput(\n            name=\"should_store_message\",\n            display_name=\"Store Messages\",\n            info=\"Store the message in the history.\",\n            value=True,\n            advanced=True,\n        ),\n        DropdownInput(\n            name=\"sender\",\n            display_name=\"Sender Type\",\n            options=[MESSAGE_SENDER_AI, MESSAGE_SENDER_USER],\n            value=MESSAGE_SENDER_AI,\n            advanced=True,\n            info=\"Type of sender.\",\n        ),\n        MessageTextInput(\n            name=\"sender_name\",\n            display_name=\"Sender Name\",\n            info=\"Name of the sender.\",\n            value=MESSAGE_SENDER_NAME_AI,\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"session_id\",\n            display_name=\"Session ID\",\n            info=\"The session ID of the chat. If empty, the current session ID parameter will be used.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"context_id\",\n            display_name=\"Context ID\",\n            info=\"The context ID of the chat. Adds an extra layer to the local memory.\",\n            value=\"\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"data_template\",\n            display_name=\"Data Template\",\n            value=\"{text}\",\n            advanced=True,\n            info=\"Template to convert Data to Text. If left empty, it will be dynamically set to the Data's text key.\",\n        ),\n        BoolInput(\n            name=\"clean_data\",\n            display_name=\"Basic Clean Data\",\n            value=True,\n            advanced=True,\n            info=\"Whether to clean data before converting to string.\",\n        ),\n    ]\n    outputs = [\n        Output(\n            display_name=\"Output Message\",\n            name=\"message\",\n            method=\"message_response\",\n        ),\n    ]\n\n    def _build_source(self, id_: str | None, display_name: str | None, source: str | None) -> Source:\n        source_dict = {}\n        if id_:\n            source_dict[\"id\"] = id_\n        if display_name:\n            source_dict[\"display_name\"] = display_name\n        if source:\n            # Handle case where source is a ChatOpenAI object\n            if hasattr(source, \"model_name\"):\n                source_dict[\"source\"] = source.model_name\n            elif hasattr(source, \"model\"):\n                source_dict[\"source\"] = str(source.model)\n            else:\n                source_dict[\"source\"] = str(source)\n        return Source(**source_dict)\n\n    async def message_response(self) -> Message:\n        # First convert the input to string if needed\n        text = self.convert_to_string()\n\n        # Get source properties\n        source, _, display_name, source_id = self.get_properties_from_source_component()\n\n        # Create or use existing Message object\n        if isinstance(self.input_value, Message) and not self.is_connected_to_chat_input():\n            message = self.input_value\n            # Update message properties\n            message.text = text\n            # Preserve existing session_id from the incoming message if it exists\n            existing_session_id = message.session_id\n        else:\n            message = Message(text=text)\n            existing_session_id = None\n\n        # Set message properties\n        message.sender = self.sender\n        message.sender_name = self.sender_name\n        # Preserve session_id from incoming message, or use component/graph session_id\n        message.session_id = (\n            self.session_id or existing_session_id or (self.graph.session_id if hasattr(self, \"graph\") else None) or \"\"\n        )\n        message.context_id = self.context_id\n        message.flow_id = self.graph.flow_id if hasattr(self, \"graph\") else None\n        message.properties.source = self._build_source(source_id, display_name, source)\n\n        # Store message if needed\n        if message.session_id and self.should_store_message:\n            stored_message = await self.send_message(message)\n            self.message.value = stored_message\n            message = stored_message\n\n        # Set accumulated token usage from all upstream LLM vertices.\n        # This must happen AFTER send_message() because streaming captures\n        # usage from chunks and would overwrite accumulated totals.\n        if hasattr(self, \"_vertex\") and self._vertex is not None:\n            accumulated_usage = self._vertex._accumulate_upstream_token_usage()  # noqa: SLF001\n            if accumulated_usage:\n                message.properties.usage = accumulated_usage\n                if self.should_store_message and message.get_id():\n                    message = await self._update_stored_message(message)\n                    await self._send_message_event(message, id_=message.get_id())\n\n        self.status = message\n        return message\n\n    def _serialize_data(self, data: Data) -> str:\n        \"\"\"Serialize Data object to JSON string.\"\"\"\n        # Convert data.data to JSON-serializable format\n        serializable_data = jsonable_encoder(data.data)\n        # Serialize with orjson, enabling pretty printing with indentation\n        json_bytes = orjson.dumps(serializable_data, option=orjson.OPT_INDENT_2)\n        # Convert bytes to string and wrap in Markdown code blocks\n        return \"```json\\n\" + json_bytes.decode(\"utf-8\") + \"\\n```\"\n\n    def _validate_input(self) -> None:\n        \"\"\"Validate the input data and raise ValueError if invalid.\"\"\"\n        if self.input_value is None:\n            msg = \"Input data cannot be None\"\n            raise ValueError(msg)\n        if isinstance(self.input_value, list) and not all(\n            isinstance(item, Message | Data | DataFrame | str) for item in self.input_value\n        ):\n            invalid_types = [\n                type(item).__name__\n                for item in self.input_value\n                if not isinstance(item, Message | Data | DataFrame | str)\n            ]\n            msg = f\"Expected Data or DataFrame or Message or str, got {invalid_types}\"\n            raise TypeError(msg)\n        if not isinstance(\n            self.input_value,\n            Message | Data | DataFrame | str | list | Generator | type(None),\n        ):\n            type_name = type(self.input_value).__name__\n            msg = f\"Expected Data or DataFrame or Message or str, Generator or None, got {type_name}\"\n            raise TypeError(msg)\n\n    def convert_to_string(self) -> str | Generator[Any, None, None]:\n        \"\"\"Convert input data to string with proper error handling.\"\"\"\n        self._validate_input()\n        if isinstance(self.input_value, list):\n            clean_data: bool = getattr(self, \"clean_data\", False)\n            return \"\\n\".join([safe_convert(item, clean_data=clean_data) for item in self.input_value])\n        if isinstance(self.input_value, Generator):\n            return self.input_value\n        return safe_convert(self.input_value)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_id",
+                "value": "",
+                "display_name": "Context ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The context ID of the chat. Adds an extra layer to the local memory.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "data_template": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "data_template",
+                "value": "{text}",
+                "display_name": "Data Template",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Template to convert Data to Text. If left empty, it will be dynamically set to the Data's text key.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "sender": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "Machine",
+                  "User"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender",
+                "value": "Machine",
+                "display_name": "Sender Type",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Type of sender.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "sender_name": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender_name",
+                "value": "AI",
+                "display_name": "Sender Name",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Name of the sender.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "session_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "session_id",
+                "value": "",
+                "display_name": "Session ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The session ID of the chat. If empty, the current session ID parameter will be used.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "should_store_message": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "should_store_message",
+                "value": true,
+                "display_name": "Store Messages",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Store the message in the history.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Display a chat message in the Playground.",
+            "icon": "MessagesSquare",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Chat Output",
+            "documentation": "https://docs.langflow.org/chat-input-and-output",
+            "minimized": true,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Output Message",
+                "method": "message_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [
+              "input_value",
+              "should_store_message",
+              "sender",
+              "sender_name",
+              "session_id",
+              "context_id",
+              "data_template",
+              "clean_data"
+            ],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "module": "custom_components.chat_output",
+              "code_hash": "84009527d08c",
+              "dependencies": {
+                "total_dependencies": 3,
+                "dependencies": [
+                  {
+                    "name": "orjson",
+                    "version": "3.11.8"
+                  },
+                  {
+                    "name": "fastapi",
+                    "version": "0.141.1"
+                  },
+                  {
+                    "name": "lfx",
+                    "version": "1.12.0"
+                  }
+                ]
+              }
+            },
+            "tool_mode": false
+          },
+          "showNode": true
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "atrium_orchestrator-b783a-atrium_parser-64e49",
+        "source": "atrium_orchestrator-b783a",
+        "target": "atrium_parser-64e49",
+        "sourceHandle": "{œdataTypeœ: œatrium_orchestratorœ, œidœ: œatrium_orchestrator-b783aœ, œnameœ: œplanœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œbusœ, œidœ: œatrium_parser-64e49œ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "atrium_orchestrator",
+            "id": "atrium_orchestrator-b783a",
+            "name": "plan",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "bus",
+            "id": "atrium_parser-64e49",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "atrium_parser-64e49-atrium_matcher-21683",
+        "source": "atrium_parser-64e49",
+        "target": "atrium_matcher-21683",
+        "sourceHandle": "{œdataTypeœ: œatrium_parserœ, œidœ: œatrium_parser-64e49œ, œnameœ: œneedœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œbusœ, œidœ: œatrium_matcher-21683œ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "atrium_parser",
+            "id": "atrium_parser-64e49",
+            "name": "need",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "bus",
+            "id": "atrium_matcher-21683",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "atrium_matcher-21683-atrium_buyer-73afd",
+        "source": "atrium_matcher-21683",
+        "target": "atrium_buyer-73afd",
+        "sourceHandle": "{œdataTypeœ: œatrium_matcherœ, œidœ: œatrium_matcher-21683œ, œnameœ: œlotsœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œbusœ, œidœ: œatrium_buyer-73afdœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "atrium_matcher",
+            "id": "atrium_matcher-21683",
+            "name": "lots",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "bus",
+            "id": "atrium_buyer-73afd",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "atrium_buyer-73afd-atrium_seller-5ce93",
+        "source": "atrium_buyer-73afd",
+        "target": "atrium_seller-5ce93",
+        "sourceHandle": "{œdataTypeœ: œatrium_buyerœ, œidœ: œatrium_buyer-73afdœ, œnameœ: œrfqœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œbusœ, œidœ: œatrium_seller-5ce93œ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "atrium_buyer",
+            "id": "atrium_buyer-73afd",
+            "name": "rfq",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "bus",
+            "id": "atrium_seller-5ce93",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "atrium_seller-5ce93-atrium_mandate-b243c",
+        "source": "atrium_seller-5ce93",
+        "target": "atrium_mandate-b243c",
+        "sourceHandle": "{œdataTypeœ: œatrium_sellerœ, œidœ: œatrium_seller-5ce93œ, œnameœ: œofferœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œbusœ, œidœ: œatrium_mandate-b243cœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "atrium_seller",
+            "id": "atrium_seller-5ce93",
+            "name": "offer",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "bus",
+            "id": "atrium_mandate-b243c",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "atrium_mandate-b243c-atrium_human-aefd1",
+        "source": "atrium_mandate-b243c",
+        "target": "atrium_human-aefd1",
+        "sourceHandle": "{œdataTypeœ: œatrium_mandateœ, œidœ: œatrium_mandate-b243cœ, œnameœ: œdealœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œbusœ, œidœ: œatrium_human-aefd1œ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "atrium_mandate",
+            "id": "atrium_mandate-b243c",
+            "name": "deal",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "bus",
+            "id": "atrium_human-aefd1",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "atrium_human-aefd1-atrium_fulfillment-96e63",
+        "source": "atrium_human-aefd1",
+        "target": "atrium_fulfillment-96e63",
+        "sourceHandle": "{œdataTypeœ: œatrium_humanœ, œidœ: œatrium_human-aefd1œ, œnameœ: œsignedœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œbusœ, œidœ: œatrium_fulfillment-96e63œ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "atrium_human",
+            "id": "atrium_human-aefd1",
+            "name": "signed",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "bus",
+            "id": "atrium_fulfillment-96e63",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "atrium_fulfillment-96e63-atrium_ops-3d4a9",
+        "source": "atrium_fulfillment-96e63",
+        "target": "atrium_ops-3d4a9",
+        "sourceHandle": "{œdataTypeœ: œatrium_fulfillmentœ, œidœ: œatrium_fulfillment-96e63œ, œnameœ: œorderœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œbusœ, œidœ: œatrium_ops-3d4a9œ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "atrium_fulfillment",
+            "id": "atrium_fulfillment-96e63",
+            "name": "order",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "bus",
+            "id": "atrium_ops-3d4a9",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "atrium_ops-3d4a9-atrium_platform-8ed2e",
+        "source": "atrium_ops-3d4a9",
+        "target": "atrium_platform-8ed2e",
+        "sourceHandle": "{œdataTypeœ: œatrium_opsœ, œidœ: œatrium_ops-3d4a9œ, œnameœ: œremedyœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œbusœ, œidœ: œatrium_platform-8ed2eœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "atrium_ops",
+            "id": "atrium_ops-3d4a9",
+            "name": "remedy",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "bus",
+            "id": "atrium_platform-8ed2e",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "atrium_platform-8ed2e-atrium_qwen-4fc79",
+        "source": "atrium_platform-8ed2e",
+        "target": "atrium_qwen-4fc79",
+        "sourceHandle": "{œdataTypeœ: œatrium_platformœ, œidœ: œatrium_platform-8ed2eœ, œnameœ: œrulingœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œbusœ, œidœ: œatrium_qwen-4fc79œ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "atrium_platform",
+            "id": "atrium_platform-8ed2e",
+            "name": "ruling",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "bus",
+            "id": "atrium_qwen-4fc79",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "ChatInput-atrium-atrium_orchestrator-b783a",
+        "source": "ChatInput-atrium",
+        "target": "atrium_orchestrator-b783a",
+        "sourceHandle": "{œdataTypeœ: œChatInputœ, œidœ: œChatInput-atriumœ, œnameœ: œmessageœ, œoutput_typesœ: [œMessageœ]}",
+        "targetHandle": "{œfieldNameœ: œneed_textœ, œidœ: œatrium_orchestrator-b783aœ, œinputTypesœ: [œMessageœ], œtypeœ: œstrœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ChatInput",
+            "id": "ChatInput-atrium",
+            "name": "message",
+            "output_types": [
+              "Message"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "need_text",
+            "id": "atrium_orchestrator-b783a",
+            "inputTypes": [
+              "Message"
+            ],
+            "type": "str"
+          }
+        }
+      },
+      {
+        "id": "atrium_qwen-4fc79-ChatOutput-atrium",
+        "source": "atrium_qwen-4fc79",
+        "target": "ChatOutput-atrium",
+        "sourceHandle": "{œdataTypeœ: œatrium_qwenœ, œidœ: œatrium_qwen-4fc79œ, œnameœ: œmessageœ, œoutput_typesœ: [œMessageœ]}",
+        "targetHandle": "{œfieldNameœ: œinput_valueœ, œidœ: œChatOutput-atriumœ, œinputTypesœ: [œDataœ, œJSONœ, œDataFrameœ, œTableœ, œMessageœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "atrium_qwen",
+            "id": "atrium_qwen-4fc79",
+            "name": "message",
+            "output_types": [
+              "Message"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "input_value",
+            "id": "ChatOutput-atrium",
+            "inputTypes": [
+              "Data",
+              "JSON",
+              "DataFrame",
+              "Table",
+              "Message"
+            ],
+            "type": "other"
+          }
+        }
+      }
+    ],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 0.75
+    }
+  }
+}

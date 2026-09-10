@@ -15,23 +15,39 @@ B2B-площадка как **среда координации ИИ-агент�
 
 ## Запуск
 
-Нужны Node 20+ и (опционально) Ollama с моделью вроде `qwen2.5:14b`.
+Нужны Node 20+ и (опционально) Ollama с моделью вроде `qwen2.5:14b`. Два отдельных контура — не смешивайте в одном окне.
 
 ```bash
 npm install
-npx next dev --port 3000 --hostname 127.0.0.1
+./start-demo.sh            # http://127.0.0.1:3001/demo  — прогон, без входа
+./start-marketplace.sh     # http://127.0.0.1:3000/login — кабинеты, вход по участнику
 ```
 
-Откройте [http://127.0.0.1:3000](http://127.0.0.1:3000). Схема взаимодействия агентов — [`/office/flow`](http://127.0.0.1:3000/office/flow). Для жюри достаточно `/demo` — прогон не требует Ollama. В шапке можно сменить компанию и модель. Состояние пишется в `localStorage` (`atrium-marketplace-v4`).
+| Скрипт | Порт | Что открыть |
+|---|---|---|
+| `./start-demo.sh` | 3001 | Прогон агентов. Логинов нет. |
+| `./start-marketplace.sh` | 3000 | Карточки участников и пароль на карточке. |
+
+Состояние пишется в `localStorage` (`atrium-marketplace-v4`). Схема агентов в маркетплейсе — [`/office/flow`](http://127.0.0.1:3000/office/flow) после входа владельца (пароль `0000`).
 
 ## Схема агентов (Langflow)
 
-Кабинеты и движок мира остаются в Next.js. Граф ролей — экран `/office/flow` и каталог [`langflow/`](langflow/): те же узлы собираются в Langflow.
+Кабинеты и движок мира остаются в Next.js. Граф ролей — экран `/office/flow`. В Langflow это **поток**, не пункт в списке проектов.
 
 ```bash
-python langflow/run_bus.py
-pip install langflow
-LANGFLOW_COMPONENTS_PATH=$PWD/langflow/components langflow run
+python langflow/run_bus.py          # только trace в терминал, не UI
+./langflow/start.sh                 # компоненты atrium + поток Atrium
+```
+
+После старта откройте **Starter Project → Flows → Atrium · шина агентов S1–S3**. Если потока нет — Upload файла `langflow/flows/Atrium.json`. Категория **atrium** живёт в палитре узлов внутри открытого потока, не в левом списке проектов.
+
+Запуск холста: кнопка **Playground** в Langflow. В потоке уже Chat Input → шина → **Atrium · Qwen** (`qwen2.5:14b`) → Chat Output. Подключение к морде: Next.js зовёт тот же флоу как HTTP, кабинеты не переписываются на Python.
+
+```
+браузер  →  Next.js (/office/flow, /buy, /api/rfq)
+                │
+                ├─ движок сделок (TypeScript) — каталог, мандат, localStorage
+                └─ опционально POST /api/langflow → Langflow :7860 /api/v1/run/atrium
 ```
 
 ## Контур одной фразой

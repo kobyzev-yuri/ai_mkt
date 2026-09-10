@@ -22,6 +22,29 @@ const CATEGORY_HINTS: { category: string; keys: string[] }[] = [
   { category: "Пиломатериалы", keys: ["доска", "брус", "фанер", "пиломатер", "лес"] },
 ];
 
+export const PLATFORM_CATEGORIES = CATEGORY_HINTS.map((h) => h.category);
+
+export function sanitizeNeed(query: string, raw?: Partial<Need> | null): Need {
+  const need: Need = { query, keywords: [] };
+  if (!raw) return parseNeed(query);
+  if (raw.category && PLATFORM_CATEGORIES.includes(raw.category)) need.category = raw.category;
+  if (Array.isArray(raw.keywords)) {
+    need.keywords = Array.from(
+      new Set(raw.keywords.map(String).map((k) => k.trim()).filter(Boolean)),
+    ).slice(0, 12);
+  }
+  if (typeof raw.qty === "number" && Number.isFinite(raw.qty) && raw.qty > 0) need.qty = Math.round(raw.qty);
+  if (typeof raw.unit === "string" && raw.unit.trim()) need.unit = raw.unit.trim().slice(0, 24);
+  if (typeof raw.budget === "number" && Number.isFinite(raw.budget) && raw.budget > 0) {
+    need.budget = Math.round(raw.budget);
+  }
+  if (typeof raw.city === "string" && raw.city.trim()) need.city = raw.city.trim().slice(0, 48);
+  if (typeof raw.deadlineDays === "number" && Number.isFinite(raw.deadlineDays) && raw.deadlineDays > 0) {
+    need.deadlineDays = Math.round(raw.deadlineDays);
+  }
+  return need;
+}
+
 function parseNumber(raw: string): number | undefined {
   const cleaned = raw.replace(/\s/g, "").replace(",", ".");
   const n = Number(cleaned);

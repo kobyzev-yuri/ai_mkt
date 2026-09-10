@@ -44,7 +44,9 @@ export default function CatalogPage() {
       <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Каталог партий</p>
       <h1 className="mt-2 font-display text-5xl">Свободные лоты</h1>
       <p className="mt-3 max-w-xl text-muted">
-        B2B торгует не штуками с витрины, а партиями: паллета, связка, бочка, слот производства. Поиск смотрит остаток за вычетом резерва.
+        B2B торгует не штуками с витрины, а партиями: паллета, связка, бочка, слот производства. Поиск агента видит
+        только свободный остаток: резерв под оплату/отгрузку прячет позицию, списание после закрытия убирает её,
+        срыв до оплаты возвращает.
       </p>
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">

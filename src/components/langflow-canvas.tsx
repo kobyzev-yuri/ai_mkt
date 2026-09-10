@@ -89,7 +89,7 @@ export function LangflowCanvas() {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2">
-        {(["all", "S1", "S2", "S3"] as const).map((id) => (
+        {(["all", "S0", "S1", "S2", "S3"] as const).map((id) => (
           <button
             key={id}
             type="button"

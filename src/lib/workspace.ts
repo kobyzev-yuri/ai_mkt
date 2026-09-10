@@ -1,3 +1,4 @@
+import type { Desk } from "./accounts";
 import { companies } from "./seed";
 import { trustOf } from "./trust";
 import type { Company, CompanyRole, Deal, Order, TrustScore } from "./types";
@@ -28,26 +29,24 @@ export const SUBNAV: Record<WorkspaceId, { href: string; label: string }[]> = {
     { href: "/deals", label: "Сделки" },
     { href: "/orders", label: "Исполнение" },
     { href: "/sell/catalog", label: "Витрина" },
+    { href: "/sell/adapter", label: "Адаптер 1С" },
   ],
   office: [
     { href: "/office", label: "Обзор" },
+    { href: "/process", label: "Процессы" },
     { href: "/office/flow", label: "Схема агентов" },
     { href: "/concept", label: "Идеология" },
-    { href: "/demo", label: "Демо" },
+    { href: "/office/settlement", label: "Расчёты" },
     { href: "/trust", label: "Аналитика" },
     { href: "/office/settings", label: "Настройки" },
   ],
 };
 
-export function workspaceFromPath(pathname: string, role: CompanyRole = "buyer"): WorkspaceId {
+export function workspaceFromPath(pathname: string, role: CompanyRole = "buyer", _desk?: Desk): WorkspaceId {
+  if (pathname === "/process" || pathname.startsWith("/process/")) return "office";
   if (pathname.startsWith("/buy") || pathname.startsWith("/rfq")) return "buy";
   if (pathname.startsWith("/sell")) return "sell";
-  if (
-    pathname.startsWith("/office") ||
-    pathname.startsWith("/concept") ||
-    pathname.startsWith("/demo") ||
-    pathname.startsWith("/trust")
-  ) {
+  if (pathname.startsWith("/office") || pathname.startsWith("/concept") || pathname.startsWith("/trust")) {
     return "office";
   }
   if (pathname === "/" || pathname.startsWith("/catalog") || pathname.startsWith("/companies")) {

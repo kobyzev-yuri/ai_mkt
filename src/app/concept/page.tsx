@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AgentBus } from "@/components/agent-bus";
+import { ProcessMap } from "@/components/process-map";
 import { Badge } from "@/components/ui";
 import { AGENT_ROLES, SCENARIOS, SPEECH_ACTS } from "@/lib/scenarios";
 
@@ -15,16 +16,24 @@ export default function ConceptPage() {
         мандаты, документы, сроки поставки. Человек задаёт политику и подписывает деньги и товар. Агенты делают остальное.
       </p>
       <div className="mt-8 flex flex-wrap gap-3">
-        <Link href="/office/flow" className="rounded-full bg-brass px-6 py-3 text-[14px] font-medium text-bg hover:bg-brass-2">
-          Схема агентов
+        <Link href="/process" className="rounded-full bg-brass px-6 py-3 text-[14px] font-medium text-bg hover:bg-brass-2">
+          Схема процессов
         </Link>
-        <Link href="/demo" className="rounded-full border border-line px-6 py-3 text-[14px] text-paper hover:border-brass/50">
-          Смотреть прогон сделки
+        <Link href="/office/flow" className="rounded-full border border-line px-6 py-3 text-[14px] text-paper hover:border-brass/50">
+          Схема агентов
         </Link>
         <Link href="/trust" className="rounded-full border border-line px-6 py-3 text-[14px] text-paper hover:border-brass/50">
           Контроль и оценка агентов
         </Link>
       </div>
+
+      <section className="mt-16">
+        <h2 className="font-display text-4xl">Макроконтур</h2>
+        <p className="mt-3 mb-8 max-w-2xl text-[15px] text-muted">
+          Шаг 00 — загрузка партий из 1С. Поиск смотрит свободный остаток на витрине, не каталог как витрину магазина.
+        </p>
+        <ProcessMap />
+      </section>
 
       <section className="mt-16">
         <h2 className="font-display text-4xl">Кому это нужно</h2>
@@ -113,7 +122,7 @@ export default function ConceptPage() {
 
       <section className="mt-16">
         <h2 className="font-display text-4xl">Сценарии, не свободный чат</h2>
-        <div className="mt-8 grid gap-4 lg:grid-cols-3">
+        <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
           {SCENARIOS.map((s) => (
             <div key={s.id} className="border border-line bg-surface p-5">
               <p className="font-mono text-[11px] text-brass">{s.id}</p>

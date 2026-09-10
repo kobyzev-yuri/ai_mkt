@@ -1,19 +1,18 @@
 import { companyById, productById } from "./agents";
 import { extractJson, ollamaChat } from "./ollama";
-import { parseNeed } from "./parse-need";
+import { parseNeed, PLATFORM_CATEGORIES } from "./parse-need";
 import type { Deal, Need } from "./types";
 
-const CATEGORIES = [
-  "Упаковка",
-  "Металлопрокат",
-  "Электроника",
-  "Химия",
-  "Спецодежда",
-  "Пиломатериалы",
-];
-
 export async function enrichNeed(query: string, model: string): Promise<Need> {
-  const fallback = parseNeed(query);
+  const { need } = await parseBuyerNeed(query, model);
+  return need;
+}
+
+export async function parseBuyerNeed(
+  query: string,
+  model: string,
+): Promise<{ need: Need; rules: Need; llm: boolean }> {
+  const rules = parseNeed(query);
   try {
     const raw = await ollamaChat({
       model,
@@ -21,7 +20,7 @@ export async function enrichNeed(query: string, model: string): Promise<Need> {
       system:
         "Ты парсер B2B-заявки. Верни только JSON. Не выдумывай числа, которых нет в тексте. budget — целые рубли, qty — число.",
       prompt: `Заявка: «${query}»
-Категории: ${CATEGORIES.join(", ")}
+Категории: ${PLATFORM_CATEGORIES.join(", ")}
 JSON: {"category":string|null,"keywords":string[],"qty":number|null,"unit":string|null,"budget":number|null,"city":string|null,"deadlineDays":number|null}`,
     });
     const parsed = extractJson(raw) as Partial<{
@@ -33,8 +32,8 @@ JSON: {"category":string|null,"keywords":string[],"qty":number|null,"unit":strin
       city: string | null;
       deadlineDays: number | null;
     }>;
-    const need: Need = { ...fallback, query };
-    if (!need.category && parsed.category && CATEGORIES.includes(parsed.category)) {
+    const need: Need = { ...rules, query };
+    if (!need.category && parsed.category && PLATFORM_CATEGORIES.includes(parsed.category)) {
       need.category = parsed.category;
     }
     if (Array.isArray(parsed.keywords)) {
@@ -47,9 +46,9 @@ JSON: {"category":string|null,"keywords":string[],"qty":number|null,"unit":strin
     if (need.deadlineDays == null && typeof parsed.deadlineDays === "number" && parsed.deadlineDays > 0) {
       need.deadlineDays = parsed.deadlineDays;
     }
-    return need;
+    return { need, rules, llm: true };
   } catch {
-    return fallback;
+    return { need: rules, rules, llm: false };
   }
 }
 
@@ -66,14 +65,13 @@ export async function voiceDeals(deals: Deal[], model: string): Promise<Deal[]> 
       qty: d.qty,
       unit: product.unit,
       unitPrice: d.currentPrice,
-      floor: d.floorPrice,
       list: d.listPrice,
       prepayPct: d.prepayPct,
       incoterm: d.incoterm,
       destination: d.destination,
       lots: d.matchReasons,
-      buyer: { company: buyer.short, agent: buyer.agent.name, mandate: buyer.agent.mandate, tone: buyer.agent.tone },
-      seller: { company: seller.short, agent: seller.agent.name, mandate: seller.agent.mandate, tone: seller.agent.tone },
+      buyer: { company: buyer.short, agent: buyer.agent.name, tone: buyer.agent.tone, tactic: d.buyerTactic },
+      seller: { company: seller.short, agent: seller.agent.name, tone: seller.agent.tone, tactic: d.sellerTactic },
       speakers: d.messages.map((m) => m.from),
       draft: d.messages.map((m) => m.text),
     };
@@ -84,8 +82,8 @@ export async function voiceDeals(deals: Deal[], model: string): Promise<Deal[]> 
       model,
       timeoutMs: 90_000,
       system:
-        "Ты пишешь реплики B2B-агентов на русском: закупка и поставка оптом, партии, паллеты, счета, самовывоз или доставка до покупателя. Цифры, статусы и порядок реплик из черновика менять нельзя. Не добавляй и не удаляй реплики. Стиль — деловая переписка, без канцелярита и без эмодзи. Верни JSON.",
-      prompt: `Перепиши тексты реплик, сохранив смысл и все числа.
+        "Ты пишешь реплики B2B-агентов на русском: закупка и поставка оптом. Цифры оферты, qty, предоплату и порядок реплик не меняй. Не добавляй и не удаляй реплики. Не называй пол цены, процент маржи, бюджет и потолок другой стороны — это не для комнаты. Если в черновике они есть, вырежи. Стиль — деловая переписка, без эмодзи. Верни JSON.",
+      prompt: `Перепиши тексты реплик. Оферты и числа сделок оставь. Пол, маржу и чужой бюджет не пиши.
 Вход: ${JSON.stringify(payload)}
 Выход: {"deals":[{"id":"...","texts":["..."]}]}
 texts.length === draft.length для каждой сделки.`,
