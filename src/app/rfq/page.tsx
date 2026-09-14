@@ -7,10 +7,13 @@ import { DictateButton } from "@/components/dictate-button";
 import { Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
 import { compactRub, days, dealStatusLabel, num, qty, rub } from "@/lib/format";
+import { memosFor } from "@/lib/partner-memo";
 import { PLATFORM_CATEGORIES, sanitizeNeed } from "@/lib/parse-need";
 import { DEMO_PROMPTS } from "@/lib/seed";
 import { useStore } from "@/lib/store";
 import type { Deal, Need } from "@/lib/types";
+import { PartnerMemoCard } from "@/components/partner-memo";
+import { RejectCardView } from "@/components/reject-card";
 
 type Phase = "idle" | "parse" | "review" | "talk" | "done";
 
@@ -59,7 +62,7 @@ function RfqInner() {
 
 function RfqComposer({ preset }: { preset: string }) {
   const router = useRouter();
-  const { company, parseRfq, launchRfq, deals, rfqs, llmModel } = useStore();
+  const { company, parseRfq, launchRfq, deals, rfqs, orders, reputations, llmModel } = useStore();
   const [query, setQuery] = useState(preset);
   const [phase, setPhase] = useState<Phase>("idle");
   const [draft, setDraft] = useState<Draft>(draftFromNeed({ query: "", keywords: [] }));
@@ -71,6 +74,10 @@ function RfqComposer({ preset }: { preset: string }) {
   const mine = useMemo(() => (rfqId ? deals.filter((d) => d.rfqId === rfqId) : []), [deals, rfqId]);
   const rfq = rfqs.find((r) => r.id === rfqId);
   const busy = phase === "parse" || phase === "talk";
+  const history = useMemo(
+    () => (company.role === "seller" ? [] : memosFor(company, deals, orders, reputations).slice(0, 3)),
+    [company, deals, orders, reputations],
+  );
 
   async function parse(raw?: string) {
     let text = (raw ?? query).trim();
@@ -146,6 +153,14 @@ function RfqComposer({ preset }: { preset: string }) {
         </p>
       )}
 
+      {history.length > 0 && phase === "idle" ? (
+        <div className="mt-8 space-y-3">
+          {history.map((memo) => (
+            <PartnerMemoCard key={memo.partnerId} memo={memo} name={companyById(memo.partnerId).short} />
+          ))}
+        </div>
+      ) : null}
+
       <textarea
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -220,7 +235,15 @@ function RfqComposer({ preset }: { preset: string }) {
         <div className="mt-10">
           <NeedStrip rfqQuery={rfq.need.query} qty={rfq.need.qty} budget={rfq.need.budget} city={rfq.need.city} />
           {mine.length === 0 ? (
-            <p className="mt-6 text-muted">Агент не нашёл позиций с достаточным совпадением. Уточните категорию или SKU.</p>
+            <div className="mt-6 space-y-3">
+              {(rfq.rejects ?? []).length ? (
+                rfq.rejects!.map((card) => (
+                  <RejectCardView key={`${card.productId ?? card.fact}-${card.codes.join("-")}`} card={card} />
+                ))
+              ) : (
+                <p className="text-muted">Агент не нашёл позиций с достаточным совпадением. Уточните категорию или SKU.</p>
+              )}
+            </div>
           ) : (
             <div className="mt-6 space-y-3">
               {mine.map((d) => (
@@ -407,6 +430,7 @@ function DealRow({ deal }: { deal: Deal }) {
         {rub(deal.currentPrice)} / {product.unit} · {compactRub(deal.currentPrice * deal.qty)}
       </p>
       <p className="mt-2 text-[12px] text-muted">{deal.matchReasons.slice(0, 2).join(" · ")}</p>
+      {deal.reject ? <p className="mt-2 text-[12px] text-terra">Что дальше: {deal.reject.nextStep}</p> : null}
     </Link>
   );
 }

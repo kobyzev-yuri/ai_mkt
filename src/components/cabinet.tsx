@@ -8,6 +8,7 @@ import { BARGAIN_TACTICS, tacticLabel } from "@/lib/bargain";
 import { useStore } from "@/lib/store";
 import { trustOf } from "@/lib/trust";
 import { counterpartiesOf } from "@/lib/workspace";
+import { partnerMemo } from "@/lib/partner-memo";
 
 export function Cabinet({ side }: { side: "buy" | "sell" }) {
   const { company, deals, rfqs, orders, reputations, setTactic } = useStore();
@@ -114,7 +115,16 @@ export function Cabinet({ side }: { side: "buy" | "sell" }) {
               </Link>
             </div>
           ) : (
-            partners.map((row) => (
+            partners.map((row) => {
+              const memo = partnerMemo(
+                company.id,
+                row.company.id,
+                isSeller ? "seller" : "buyer",
+                deals,
+                orders,
+                reputations,
+              );
+              return (
               <Link
                 key={row.company.id}
                 href={`/companies/${row.company.id}`}
@@ -125,12 +135,14 @@ export function Cabinet({ side }: { side: "buy" | "sell" }) {
                   <p className="text-[13px] text-muted">
                     {row.company.city} · {row.company.industry} · доверие {row.trust}
                   </p>
+                  <p className="mt-1 text-[12px] leading-relaxed text-muted">{memo.line}</p>
                 </div>
                 <p className="font-mono text-[12px] text-brass">
                   {row.rooms} комн. · {row.liveOrders} в работе · {compactRub(row.volume)}
                 </p>
               </Link>
-            ))
+              );
+            })
           )}
         </div>
       </section>

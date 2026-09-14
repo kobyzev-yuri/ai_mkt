@@ -35,8 +35,23 @@ export interface ExternalLotRow {
   certs: string[];
 }
 
-export type AdaptSkip = { row: ExternalLotRow; reason: string };
+export type SkipCode = "service" | "no_floor" | "zero_qty" | "no_sku" | "not_multiple";
+export type SkipOwner = "supplier" | "platform";
+
+export interface SkipIssue {
+  code: SkipCode;
+  fact: string;
+  fix: string;
+  owner: SkipOwner;
+}
+
+export type AdaptSkip = { row: ExternalLotRow; issues: SkipIssue[] };
 export type AdaptOk = { row: ExternalLotRow; lot: Lot; productName: string; packNote: string };
+
+export const SKIP_OWNER_LABEL: Record<SkipOwner, string> = {
+  supplier: "поставщик сам",
+  platform: "человек площадки",
+};
 
 function numRu(raw: string): number | null {
   const t = raw.trim().replace(/\s/g, "").replace(",", ".");
@@ -75,40 +90,74 @@ export function parse1CCsv(text: string): ExternalLotRow[] {
   });
 }
 
+function collectIssues(row: ExternalLotRow, sellerId: string): { issues: SkipIssue[]; productName?: string; pack?: { packSize: number; packUnit: string } } {
+  const issues: SkipIssue[] = [];
+  if (row.unit === "усл" || /доставк|услуг/i.test(row.name)) {
+    issues.push({
+      code: "service",
+      fact: "не партия — услуга",
+      fix: "убрать услугу из выгрузки остатков",
+      owner: "supplier",
+    });
+  }
+  if (row.floor == null || row.floor <= 0) {
+    issues.push({
+      code: "no_floor",
+      fact: "нет пола цены",
+      fix: "проставить МинЦену в карточке 1С",
+      owner: "supplier",
+    });
+  }
+  if (row.qty <= 0) {
+    issues.push({
+      code: "zero_qty",
+      fact: "нулевой остаток",
+      fix: "догрузить остаток или не выгружать строку",
+      owner: "supplier",
+    });
+  }
+  const product = products.find((p) => p.sellerId === sellerId && p.sku === row.sku);
+  if (!product) {
+    issues.push({
+      code: "no_sku",
+      fact: "нет карточки SKU на площадке",
+      fix: "онбординг номенклатуры, затем повторная выгрузка",
+      owner: "platform",
+    });
+    return { issues };
+  }
+  const pack = packingOf(product);
+  const qty = Math.floor(row.qty / pack.packSize) * pack.packSize;
+  if (qty < pack.packSize) {
+    issues.push({
+      code: "not_multiple",
+      fact: `остаток меньше кратности площадки (${pack.packSize} ${pack.packUnit})`,
+      fix: `округлить к ${pack.packSize} ${pack.packUnit} или догрузить остаток`,
+      owner: "supplier",
+    });
+  }
+  return { issues, productName: product.name, pack };
+}
+
 export function adapt1CRows(rows: ExternalLotRow[], sellerId: string): { ok: AdaptOk[]; skipped: AdaptSkip[] } {
   const ok: AdaptOk[] = [];
   const skipped: AdaptSkip[] = [];
   for (const row of rows) {
-    if (row.unit === "усл" || /доставк|услуг/i.test(row.name)) {
-      skipped.push({ row, reason: "не партия — услуга, на витрину не кладём" });
-      continue;
-    }
-    if (row.floor == null || row.floor <= 0) {
-      skipped.push({ row, reason: "нет пола цены — агент поставки не имеет права торговать" });
-      continue;
-    }
-    if (row.qty <= 0) {
-      skipped.push({ row, reason: "нулевой остаток" });
+    const { issues, productName, pack } = collectIssues(row, sellerId);
+    if (issues.length) {
+      skipped.push({ row, issues });
       continue;
     }
     const product = products.find((p) => p.sellerId === sellerId && p.sku === row.sku);
-    if (!product) {
-      skipped.push({ row, reason: "нет карточки SKU на площадке — сначала онбординг номенклатуры" });
-      continue;
-    }
-    const pack = packingOf(product);
+    if (!product || !pack) continue;
     const qty = Math.floor(row.qty / pack.packSize) * pack.packSize;
-    if (qty < pack.packSize) {
-      skipped.push({ row, reason: `остаток меньше кратности площадки (${pack.packSize} ${pack.packUnit})` });
-      continue;
-    }
     const packNote =
       row.packSize === pack.packSize
         ? `${pack.packSize} ${pack.packUnit}`
         : `их ${row.packSize} → наши ${pack.packSize} ${pack.packUnit}`;
     ok.push({
       row,
-      productName: product.name,
+      productName: productName ?? product.name,
       packNote,
       lot: {
         id: `lot-adapt-${product.sku}-${row.batchNo || row.code}`,

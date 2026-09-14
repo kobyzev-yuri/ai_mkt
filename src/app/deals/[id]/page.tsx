@@ -4,16 +4,19 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AgentMark, Badge } from "@/components/ui";
+import { PartnerMemoCard } from "@/components/partner-memo";
+import { RejectCardView } from "@/components/reject-card";
 import { companyById, productById } from "@/lib/agents";
 import { compactRub, days, dealStatusLabel, deliveryLine, qty, rub, when } from "@/lib/format";
+import { partnerMemo } from "@/lib/partner-memo";
 import { useStore } from "@/lib/store";
-import type { Actor, Deal } from "@/lib/types";
+import type { Actor, Deal, Order, TrustScore } from "@/lib/types";
 import { tacticLabel } from "@/lib/bargain";
 import { veilChat } from "@/lib/veil-chat";
 
 export default function DealRoomPage() {
   const { id } = useParams<{ id: string }>();
-  const { deals, approveDeal, rejectDeal, company } = useStore();
+  const { deals, orders, reputations, approveDeal, rejectDeal, company } = useStore();
   const deal = deals.find((d) => d.id === id);
 
   if (!deal) {
@@ -27,19 +30,36 @@ export default function DealRoomPage() {
     );
   }
 
-  return <Room key={deal.id} deal={deal} companyId={company.id} onApprove={approveDeal} onReject={rejectDeal} />;
+  return (
+    <Room
+      key={deal.id}
+      deal={deal}
+      deals={deals}
+      companyId={company.id}
+      onApprove={approveDeal}
+      onReject={rejectDeal}
+      orders={orders}
+      reputations={reputations}
+    />
+  );
 }
 
 function Room({
   deal,
+  deals,
   companyId,
   onApprove,
   onReject,
+  orders,
+  reputations,
 }: {
   deal: Deal;
+  deals: Deal[];
   companyId: string;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
+  orders: Order[];
+  reputations: Record<string, TrustScore>;
 }) {
   const product = productById(deal.productId);
   const seller = companyById(deal.sellerId);
@@ -70,6 +90,8 @@ function Room({
   const max = deal.listPrice + span * 0.08;
   const pct = (v: number) => Math.min(100, Math.max(0, ((v - min) / (max - min)) * 100));
   const own = iAmSeller ? seller : buyer;
+  const counterparty = iAmSeller ? buyer : seller;
+  const memo = partnerMemo(companyId, counterparty.id, iAmSeller ? "seller" : "buyer", deals, orders, reputations);
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-8 px-5 py-10 lg:grid-cols-[1.15fr_0.85fr]">
@@ -158,13 +180,20 @@ function Room({
           </p>
         )}
         {deal.status === "rejected" && !playing && (
-          <p className="mt-8 border border-terra/30 bg-surface px-4 py-3 text-[14px] text-terra">
-            Мандаты не пересеклись — или человек отклонил. Агент может открыть заявку другому поставщику.
-          </p>
+          <div className="mt-8">
+            {deal.reject ? (
+              <RejectCardView card={deal.reject} />
+            ) : (
+              <p className="border border-terra/30 bg-surface px-4 py-3 text-[14px] text-terra">
+                Мандаты не пересеклись — или человек отклонил. Агент может открыть заявку другому поставщику.
+              </p>
+            )}
+          </div>
         )}
       </section>
 
       <aside className="space-y-4">
+        <PartnerMemoCard memo={memo} name={counterparty.short} />
         <div className="border border-line bg-surface p-5">
           <p className="font-mono text-[10px] uppercase tracking-widest text-muted">
             {iAmSeller ? "Лестница и ваш пол" : "Условия на столе"}

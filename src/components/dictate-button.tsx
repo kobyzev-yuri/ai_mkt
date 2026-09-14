@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 type SpeechRec = {
   lang: string;
@@ -27,6 +27,18 @@ function recognitionCtor(): (new () => SpeechRec) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+function noopSubscribe() {
+  return () => {};
+}
+
+function speechSupported() {
+  return Boolean(recognitionCtor());
+}
+
+function noSpeech() {
+  return false;
+}
+
 export function DictateButton({
   disabled,
   onFinal,
@@ -35,12 +47,11 @@ export function DictateButton({
   onFinal: (text: string) => void;
 }) {
   const recRef = useRef<SpeechRec | null>(null);
-  const [supported, setSupported] = useState(false);
+  const supported = useSyncExternalStore(noopSubscribe, speechSupported, noSpeech);
   const [listening, setListening] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
   useEffect(() => {
-    setSupported(Boolean(recognitionCtor()));
     return () => {
       recRef.current?.stop();
     };

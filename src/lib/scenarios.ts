@@ -98,11 +98,11 @@ export const SCENARIOS: Scenario[] = [
   {
     id: "S0",
     name: "Витрина",
-    blurb: "Поставщик выгружает остатки из 1С. Поиск потом видит свободный qty, не прайс-лист.",
+    blurb: "Поставщик выгружает остатки из 1С. Карточка отказа — до кнопки. Поиск потом видит свободный qty, не прайс-лист.",
     steps: [
       { id: "export", title: "Выгрузка остатков из 1С", roles: ["seller-agent"] },
-      { id: "map", title: "Маппинг SKU, пола и кратности", roles: ["mandate"] },
-      { id: "publish", title: "Партии на витрине", roles: ["matcher"] },
+      { id: "map", title: "Маппинг и карточка отказа", roles: ["mandate"] },
+      { id: "publish", title: "Выложить партии на витрину", roles: ["human"], human: true },
     ],
   },
   {
@@ -112,7 +112,7 @@ export const SCENARIOS: Scenario[] = [
     steps: [
       { id: "parse", title: "Разбор потребности", roles: ["parser", "orchestrator"] },
       { id: "insure", title: "Страховка разбора", roles: ["human"], human: true },
-      { id: "match", title: "Подбор свободных партий", roles: ["matcher", "mandate"] },
+      { id: "match", title: "Подбор или карточка отказа", roles: ["matcher", "mandate"] },
       { id: "talk", title: "Запрос и торг", roles: ["buyer-agent", "seller-agent", "mandate"] },
       { id: "gate", title: "Утверждение сделки", roles: ["human"], human: true },
     ],

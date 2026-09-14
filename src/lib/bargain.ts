@@ -1,4 +1,4 @@
-import type { BargainTactic, Company } from "./types";
+import type { BargainFail, BargainTactic, Company } from "./types";
 
 export const BARGAIN_TACTICS: {
   id: BargainTactic;
@@ -62,11 +62,12 @@ export function runBargain(opts: {
   buyerTactic: BargainTactic;
   openingPrepay: number;
   wantPrepay: number;
-}): { ticks: BargainTick[]; agreed: boolean; price: number; prepayPct: number } {
+}): { ticks: BargainTick[]; agreed: boolean; price: number; prepayPct: number; fail?: BargainFail } {
   const sell = SPEC[opts.sellerTactic];
   const buy = SPEC[opts.buyerTactic];
   const floor = Math.min(opts.floor, opts.list);
-  const cap = Math.max(opts.cap, floor);
+  const cap = opts.cap;
+  const floorAboveCap = floor > cap + 0.001;
 
   let ask = roundPrice(Math.max(floor, opts.list * sell.askMult));
   let bid = roundPrice(Math.min(cap, ask * buy.bidFrac));
@@ -80,12 +81,19 @@ export function runBargain(opts: {
 
   const close = (price: number, prepayPct: number) => ({
     ticks,
-    agreed: true,
+    agreed: true as const,
     price: roundPrice(price),
     prepayPct,
   });
+  const fail = (reason: BargainFail, price: number, prepayPct: number) => ({
+    ticks,
+    agreed: false as const,
+    price: roundPrice(price),
+    prepayPct,
+    fail: reason,
+  });
 
-  if (bid + 0.001 >= ask && ask <= cap) return close(ask, sellerPrepay);
+  if (!floorAboveCap && bid + 0.001 >= ask && ask <= cap) return close(ask, sellerPrepay);
 
   const steps = Math.max(sell.steps, buy.steps);
   for (let i = 0; i < steps; i += 1) {
@@ -94,25 +102,27 @@ export function runBargain(opts: {
       if (opts.sellerTactic === "fast") sellerPrepay = Math.min(sellerPrepay, Math.max(opts.wantPrepay, 40));
       ask = next;
       ticks.push({ from: "seller", price: ask, prepayPct: sellerPrepay });
-      if (ask <= cap) return close(ask, sellerPrepay);
+      if (!floorAboveCap && ask <= cap) return close(ask, sellerPrepay);
     }
     if (i < buy.steps) {
       bid = roundPrice(Math.min(cap, bid + (ask - bid) * buy.concede));
       ticks.push({ from: "buyer", price: bid, prepayPct: opts.wantPrepay });
-      if (bid + 0.001 >= ask && ask <= cap) return close(ask, sellerPrepay);
+      if (!floorAboveCap && bid + 0.001 >= ask && ask <= cap) return close(ask, sellerPrepay);
     }
   }
 
-  if (ask <= cap) return close(ask, sellerPrepay);
-  if (floor <= cap && opts.sellerTactic !== "firm") {
+  if (!floorAboveCap && ask <= cap) return close(ask, sellerPrepay);
+  if (!floorAboveCap && opts.sellerTactic !== "firm") {
     ask = roundPrice(Math.max(floor, Math.min(ask, cap)));
     ticks.push({ from: "seller", price: ask, prepayPct: sellerPrepay });
     return close(ask, sellerPrepay);
   }
-  if (floor <= cap && ask > 0 && (ask - cap) / ask < 0.05) {
-    ask = roundPrice(cap);
+  if (!floorAboveCap && ask > 0 && (ask - cap) / ask < 0.05) {
+    ask = roundPrice(Math.max(floor, cap));
     ticks.push({ from: "seller", price: ask, prepayPct: sellerPrepay });
-    return close(ask, sellerPrepay);
+    if (ask <= cap) return close(ask, sellerPrepay);
   }
-  return { ticks, agreed: false, price: ask, prepayPct: sellerPrepay };
+  if (floorAboveCap) return fail("floor_above_cap", ask, sellerPrepay);
+  if (opts.sellerTactic === "firm") return fail("seller_held", ask, sellerPrepay);
+  return fail("no_overlap", ask, sellerPrepay);
 }

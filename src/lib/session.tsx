@@ -6,7 +6,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -65,6 +64,18 @@ function getServerSnapshot() {
   return EMPTY;
 }
 
+function clientTrue() {
+  return true;
+}
+
+function serverFalse() {
+  return false;
+}
+
+function noopSubscribe() {
+  return () => {};
+}
+
 type SessionStore = {
   account: Account | null;
   hydrated: boolean;
@@ -78,12 +89,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const { setCompany } = useStore();
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const account = useMemo(() => (snap.accountId ? accountById(snap.accountId) ?? null : null), [snap.accountId]);
-  const [hydrated, setHydrated] = useState(false);
+  const hydrated = useSyncExternalStore(noopSubscribe, clientTrue, serverFalse);
 
   useEffect(() => {
-    memory = read();
-    emit();
-    setHydrated(true);
+    const next = read();
+    if (next.accountId !== memory.accountId) {
+      memory = next;
+      emit();
+    }
   }, []);
 
   const signIn = useCallback(

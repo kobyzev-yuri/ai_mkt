@@ -4,12 +4,12 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui";
 import { num, qty, rub } from "@/lib/format";
-import { ADAPTER_MAP, DEMO_1C_CSV, adapt1CRows, parse1CCsv } from "@/lib/lot-adapter";
+import { ADAPTER_MAP, DEMO_1C_CSV, SKIP_OWNER_LABEL, adapt1CRows, parse1CCsv } from "@/lib/lot-adapter";
 import { SELLER_ID, companies } from "@/lib/seed";
 import { useStore } from "@/lib/store";
 
 export default function SellAdapterPage() {
-  const { importAdaptedLots, setCompany, lots, company } = useStore();
+  const { importAdaptedLots, lots, company } = useStore();
   const [csv, setCsv] = useState(DEMO_1C_CSV);
   const [done, setDone] = useState(0);
 
@@ -19,7 +19,6 @@ export default function SellAdapterPage() {
   const live = lots.filter((l) => l.id.startsWith("lot-adapt-")).length;
 
   function apply() {
-    if (company.id !== SELLER_ID) setCompany(SELLER_ID);
     importAdaptedLots(ok.map((x) => x.lot));
     setDone(ok.length);
   }
@@ -31,7 +30,7 @@ export default function SellAdapterPage() {
       <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-muted">
         Пример, не продукт. {seller.name} выгрузил остатки из 1С. Коннектор и маппинг — работа интегратора. Площадка
         принимает только канон партии: SKU уже есть, есть пол, остаток кратен паллете. Услуги и строки без пола
-        отбрасываются.
+        отбрасываются. Витрина, счёт и резерв не меняются, пока не нажмёте «Выложить».
       </p>
       <p className="mt-3 text-[13px] text-muted">
         После приёма лоты появляются в{" "}
@@ -40,6 +39,11 @@ export default function SellAdapterPage() {
         </Link>
         {live ? ` · сейчас с адаптера: ${live}` : null}.
       </p>
+      {company.id !== SELLER_ID ? (
+        <p className="mt-3 border border-brass/40 bg-surface px-4 py-3 text-[13px] text-muted">
+          Партии лягут на {seller.short}. Активная организация ({company.short}) не меняется.
+        </p>
+      ) : null}
 
       <div className="mt-10 grid gap-3 sm:grid-cols-3">
         {ADAPTER_MAP.slice(0, 3).map((m) => (
@@ -72,6 +76,7 @@ export default function SellAdapterPage() {
           <h2 className="mt-1 font-display text-3xl">
             {ok.length} партий · {skipped.length} отказ
           </h2>
+          <p className="mt-2 text-[13px] text-muted">Приму / не приму — как страховка разбора у закупки. Без кнопки витрина не меняется.</p>
           <ul className="mt-4 space-y-3">
             {ok.map((item) => (
               <li key={item.lot.id} className="border border-line bg-surface p-4">
@@ -90,13 +95,23 @@ export default function SellAdapterPage() {
               </li>
             ))}
             {skipped.map((item) => (
-              <li key={`${item.row.code}-${item.reason}`} className="border border-line/70 bg-bg p-4">
+              <li key={`${item.row.code}-${item.issues.map((i) => i.code).join("-")}`} className="border border-terra/30 bg-bg p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="terra">отсев</Badge>
                   <span className="font-mono text-[11px] text-muted">{item.row.sku || item.row.code}</span>
                 </div>
                 <p className="mt-2 text-[15px]">{item.row.name}</p>
-                <p className="mt-1 text-[13px] text-terra">{item.reason}</p>
+                <ul className="mt-3 space-y-2">
+                  {item.issues.map((issue) => (
+                    <li key={issue.code} className="border border-line/70 px-3 py-2">
+                      <p className="text-[13px] text-terra">{issue.fact}</p>
+                      <p className="mt-1 text-[12px] text-muted">Что сделать: {issue.fix}</p>
+                      <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-brass">
+                        Кто: {SKIP_OWNER_LABEL[issue.owner]}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
           </ul>

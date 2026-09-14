@@ -123,6 +123,18 @@ export interface Offer {
   at: string;
 }
 
+export type MatchFailCode = "wrong_shelf" | "no_free_qty" | "pack_mismatch" | "unit_mismatch" | "score_low";
+export type BargainFail = "floor_above_cap" | "seller_held" | "no_overlap";
+export type RejectCode = MatchFailCode | BargainFail;
+
+export interface RejectCard {
+  fact: string;
+  nextStep: string;
+  codes: RejectCode[];
+  productId?: string;
+  sellerId?: string;
+}
+
 export interface Rfq {
   id: string;
   buyerId: string;
@@ -130,6 +142,7 @@ export interface Rfq {
   need: Need;
   status: RfqStatus;
   awardedDealId?: string;
+  rejects?: RejectCard[];
 }
 
 export interface Deal {
@@ -157,6 +170,7 @@ export interface Deal {
   sellerTactic?: BargainTactic;
   orderId?: string;
   voicedBy?: string;
+  reject?: RejectCard;
 }
 
 export interface Invoice {

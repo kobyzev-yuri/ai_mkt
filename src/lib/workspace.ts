@@ -42,7 +42,7 @@ export const SUBNAV: Record<WorkspaceId, { href: string; label: string }[]> = {
   ],
 };
 
-export function workspaceFromPath(pathname: string, role: CompanyRole = "buyer", _desk?: Desk): WorkspaceId {
+export function workspaceFromPath(pathname: string, role: CompanyRole = "buyer", desk?: Desk): WorkspaceId {
   if (pathname === "/process" || pathname.startsWith("/process/")) return "office";
   if (pathname.startsWith("/buy") || pathname.startsWith("/rfq")) return "buy";
   if (pathname.startsWith("/sell")) return "sell";
@@ -53,6 +53,8 @@ export function workspaceFromPath(pathname: string, role: CompanyRole = "buyer",
     return "plaza";
   }
   if (pathname.startsWith("/deals") || pathname.startsWith("/orders") || pathname.startsWith("/dashboard")) {
+    if (desk === "sell") return "sell";
+    if (desk === "buy") return "buy";
     return role === "seller" ? "sell" : "buy";
   }
   return "plaza";

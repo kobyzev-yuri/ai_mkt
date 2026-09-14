@@ -212,8 +212,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             },
             {
               actor: "matcher",
-              action: "Открыты комнаты",
-              detail: `${data.deals.length} поставщиков`,
+              action: data.deals.length ? "Открыты комнаты" : "Карточка отказа",
+              detail: data.deals.length
+                ? `${data.deals.length} поставщиков`
+                : (data.rfq.rejects ?? []).map((r) => r.fact).join("; ").slice(0, 280) || "нет совпадения",
               ref: data.rfq.id,
             },
             {
@@ -243,7 +245,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           { ...memory, rfqs: [rfq, ...memory.rfqs], deals: [...deals, ...memory.deals] },
           [
             { actor: "human", action: "Страховка без Ollama", detail: query.slice(0, 220) },
-            { actor: "matcher", action: "Открыты комнаты", detail: `${deals.length} поставщиков`, ref: rfq.id },
+            { actor: "matcher", action: deals.length ? "Открыты комнаты" : "Карточка отказа", detail: `${deals.length} поставщиков`, ref: rfq.id },
           ],
         ),
       );
@@ -479,16 +481,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const importAdaptedLots = useCallback((incoming: Lot[]) => {
     if (!incoming.length) return;
-    const kept = memory.lots.filter((l) => !l.id.startsWith("lot-adapt-"));
+    const byId = new Map(memory.lots.map((l) => [l.id, l]));
+    for (const lot of incoming) {
+      const prev = byId.get(lot.id);
+      if (prev && prev.reserved > 0) {
+        byId.set(lot.id, { ...lot, reserved: prev.reserved, qty: Math.max(lot.qty, prev.reserved) });
+      } else {
+        byId.set(lot.id, lot);
+      }
+    }
+    const incomingIds = new Set(incoming.map((l) => l.id));
+    const merged = incoming.map((l) => byId.get(l.id)!);
+    const rest = [...byId.values()].filter((l) => !incomingIds.has(l.id));
     persist(
       withAudit(
-        { ...memory, lots: [...incoming, ...kept] },
+        { ...memory, lots: [...merged, ...rest] },
         [
           {
             actor: "seller-agent",
             action: "Выгрузка склада принята",
             detail: `${incoming.length} партий с адаптера 1С`,
-            constraint: "Пол и цена не пишутся из файла в обход карточки SKU",
+            constraint: "Повторная выгрузка не снимает чужие партии и не обнуляет резерв",
           },
         ],
       ),
