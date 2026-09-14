@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Badge, Stat } from "@/components/ui";
+import { ControlExamplesTable } from "@/components/control-examples-table";
 import { evaluateMarketplace } from "@/lib/effectiveness";
 import { when } from "@/lib/format";
 import { AGENT_ROLES } from "@/lib/scenarios";
@@ -80,6 +81,17 @@ export default function TrustPage() {
               <p className="mt-2 text-[13px] leading-relaxed text-muted">{x.d}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="mt-14">
+        <h2 className="font-display text-3xl">Как это выглядит на экране</h2>
+        <p className="mt-2 max-w-2xl text-[14px] text-muted">
+          Те же числа, что в демо: лист арматуры 52 800 ₽/т, пол 49 104 скрыт от закупки. Модель нигде не поднимает
+          потолок до пола.
+        </p>
+        <div className="mt-6">
+          <ControlExamplesTable />
         </div>
       </section>
 

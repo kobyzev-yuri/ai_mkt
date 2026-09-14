@@ -15,7 +15,7 @@ const PILLARS = [
   },
   {
     href: "/office/flow",
-    kicker: "Langflow",
+    kicker: "Схема",
     title: "Схема агентов",
     text: "Граф ролей на шине: кто публикует партии, кто считает пол, кто подписывает.",
   },

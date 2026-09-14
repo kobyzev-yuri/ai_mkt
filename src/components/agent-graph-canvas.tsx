@@ -6,11 +6,11 @@ import {
   FLOW_EDGES,
   FLOW_LANES,
   FLOW_NODES,
-  exportLangflowGraph,
+  exportAgentGraph,
   nodeById,
   type FlowLane,
   type FlowScenario,
-} from "@/lib/langflow-graph";
+} from "@/lib/agent-graph";
 
 const W = 1440;
 const H = 560;
@@ -55,7 +55,7 @@ function ports(from: { x: number; y: number }, to: { x: number; y: number }) {
   return { x1: from.x, y1: from.y + NH / 2, x2: to.x + NW, y2: to.y + NH / 2 };
 }
 
-export function LangflowCanvas() {
+export function AgentGraphCanvas() {
   const [scenario, setScenario] = useState<FlowScenario | "all">("all");
   const [selected, setSelected] = useState<string>("buyer-agent");
 
@@ -77,11 +77,11 @@ export function LangflowCanvas() {
   const incident = edges.filter((e) => e.from === selected || e.to === selected);
 
   function download() {
-    const blob = new Blob([JSON.stringify(exportLangflowGraph(), null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(exportAgentGraph(), null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "atrium-langflow-graph.json";
+    a.download = "atrium-agent-graph.json";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -110,7 +110,7 @@ export function LangflowCanvas() {
         </button>
       </div>
       <p className="mt-3 text-[13px] text-muted">
-        Как в Langflow: узлы — роли, рёбра — действия протокола. Модель реплик в граф не входит. Нажмите узел.
+        Узлы — роли, рёбра — действия протокола. Модель реплик в граф не входит. Нажмите узел.
       </p>
 
       <div className="mt-5 overflow-x-auto border border-line bg-surface">

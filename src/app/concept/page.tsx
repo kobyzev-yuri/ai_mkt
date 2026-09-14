@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AgentBus } from "@/components/agent-bus";
+import { ControlExamplesTable } from "@/components/control-examples-table";
 import { ProcessMap } from "@/components/process-map";
 import { Badge } from "@/components/ui";
 import { AGENT_ROLES, SCENARIOS, SPEECH_ACTS } from "@/lib/scenarios";
@@ -167,6 +168,29 @@ export default function ConceptPage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="mt-16">
+        <h2 className="font-display text-4xl">Примеры контроля</h2>
+        <p className="mt-3 max-w-2xl text-[15px] text-muted">
+          Опечатка в объёме, чужая полка, строка 1С без пола — движок режет, модель не «договаривается». Пол продавца
+          закупщик не видит.
+        </p>
+        <div className="mt-8">
+          <ControlExamplesTable />
+        </div>
+        <p className="mt-4 text-[13px] text-muted">
+          Разбор чисел:{" "}
+          <Link href="/rfq" className="text-brass">
+            /rfq
+          </Link>{" "}
+          (арматура 12 / 2 / 120 т) ·{" "}
+          <Link href="/sell/adapter" className="text-brass">
+            /sell/adapter
+          </Link>{" "}
+          (SP-XXX) · полный текст{" "}
+          <span className="font-mono text-paper">docs/BUSINESS.md</span> § 4.1.
+        </p>
       </section>
 
       <section className="mt-16 border border-brass/30 bg-surface p-6">

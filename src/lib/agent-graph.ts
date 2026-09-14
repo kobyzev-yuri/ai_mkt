@@ -23,7 +23,7 @@ export interface FlowEdge {
 
 const role = (id: AgentRoleId) => AGENT_ROLES.find((r) => r.id === id)!;
 
-/** Canonical Langflow graph: agents do not call each other as services — they publish acts on the deal bus. */
+/** Canonical agent bus for docs: roles publish acts on the deal, they do not call each other as services. */
 export const FLOW_NODES: FlowNode[] = [
   {
     id: "need",
@@ -172,7 +172,7 @@ export function nodeById(id: string): FlowNode | undefined {
   return FLOW_NODES.find((n) => n.id === id);
 }
 
-export function exportLangflowGraph() {
+export function exportAgentGraph() {
   return {
     name: "Atrium · шина агентов S1–S3",
     description:
