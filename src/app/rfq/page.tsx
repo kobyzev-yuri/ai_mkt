@@ -9,6 +9,7 @@ import { companyById, productById } from "@/lib/agents";
 import { compactRub, days, dealStatusLabel, num, qty, rub } from "@/lib/format";
 import { memosFor } from "@/lib/partner-memo";
 import { PLATFORM_CATEGORIES, sanitizeNeed } from "@/lib/parse-need";
+import { mandatePreview } from "@/lib/mandate-preview";
 import { DEMO_PROMPTS } from "@/lib/seed";
 import { useStore } from "@/lib/store";
 import type { Deal, Need } from "@/lib/types";
@@ -218,6 +219,7 @@ function RfqComposer({ preset }: { preset: string }) {
 
       {(phase === "review" || phase === "talk") && (
         <NeedReview
+          query={query}
           draft={draft}
           rules={rules}
           note={llmNote}
@@ -284,6 +286,7 @@ function RfqComposer({ preset }: { preset: string }) {
 }
 
 function NeedReview({
+  query,
   draft,
   rules,
   note,
@@ -292,6 +295,7 @@ function NeedReview({
   onConfirm,
   onBack,
 }: {
+  query: string;
   draft: Draft;
   rules: Need | null;
   note: string | null;
@@ -300,6 +304,8 @@ function NeedReview({
   onConfirm: () => void;
   onBack: () => void;
 }) {
+  const { lots } = useStore();
+  const preview = useMemo(() => mandatePreview(needFromDraft(query, draft), lots), [query, draft, lots]);
   const field = (key: keyof Draft) => ({
     value: draft[key],
     onChange: (e: { target: { value: string } }) => onChange({ ...draft, [key]: e.target.value }),
@@ -311,7 +317,7 @@ function NeedReview({
     <div className="mt-10 border border-brass/40 bg-surface p-5">
       <p className="font-mono text-[10px] uppercase tracking-widest text-brass">Страховка · подтвердите полку</p>
       <p className="mt-2 text-[14px] leading-relaxed text-muted">
-        Модель не исправляет себя второй раз. Если полка не та — смените её здесь. Поиск идёт только после этой кнопки.
+        Модель не исправляет себя второй раз. Если полка, объём или ориентир не те — смените здесь. Потолок заявки — бюджет на единицу после кратности; его сверяем с листом витрины, не с полом поставщика. Поиск — только после этой кнопки.
       </p>
       {note ? <p className="mt-3 text-[13px] text-brass">{note}</p> : null}
       {shelfMismatch ? (
@@ -324,6 +330,11 @@ function NeedReview({
           Полка не задана — агент будет искать по словам. Лучше выбрать категорию витрины.
         </p>
       ) : null}
+      {preview.lines.map((line) => (
+        <p key={line.text} className={`mt-3 text-[13px] leading-relaxed ${line.tone === "terra" ? "text-terra" : "text-brass"}`}>
+          {line.text}
+        </p>
+      ))}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <label className="block text-[12px] text-muted">
