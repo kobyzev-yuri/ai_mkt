@@ -4,21 +4,26 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { createRfq as runRfq } from "./agents";
+import { isDemoApp } from "./app-mode";
+import { mergeAccounts } from "./accounts";
+import { mergeListings } from "./catalog";
+import { allCompanies, mergeCompanies } from "./roster";
 import { applyAcceptance, applyAdvancePayment, applyRemainderPayment, createOrderFromDeal } from "./fulfillment";
 import { consumeLots, releaseLots } from "./inventory";
 import { uid } from "./ids";
 import { acceptRemedy, escalateIncident, openIncident, platformResolve } from "./ops";
 import { withTactic } from "./bargain";
-import { BUYER_ID, SELLER_ID, companies, DEMO_PROMPTS, lots as seedLots, seedDeals, seedOrders, seedRfqs, seedTactics } from "./seed";
+import { BUYER_ID, SELLER_ID, DEMO_PROMPTS, lots as seedLots, seedDeals, seedOrders, seedRfqs, seedTactics } from "./seed";
 import { DEFAULT_MODEL } from "./ollama";
 import { seedTrust } from "./trust";
 import { parseNeed } from "./parse-need";
-import type { AuditEvent, BargainTactic, Company, Deal, IncidentKind, Lot, MarketplaceState, Need, Order, Rfq } from "./types";
+import type { AuditEvent, BargainTactic, Company, Deal, IncidentKind, Lot, MarketplaceState, Need, Order, Product, Rfq } from "./types";
 
 const KEY = "atrium-marketplace-v4";
 
@@ -77,6 +82,23 @@ function emit() {
   for (const listener of listeners) listener();
 }
 
+let syncTimer: ReturnType<typeof setTimeout> | undefined;
+
+function queueDbSync(state: MarketplaceState) {
+  if (isDemoApp()) return;
+  if (typeof window === "undefined") return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    void fetch("/api/db/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rfqs: state.rfqs, deals: state.deals, orders: state.orders }),
+    }).catch(() => {
+      /* keep local session */
+    });
+  }, 400);
+}
+
 function persist(next: MarketplaceState) {
   memory = next;
   try {
@@ -85,6 +107,7 @@ function persist(next: MarketplaceState) {
     /* ignore quota */
   }
   emit();
+  queueDbSync(next);
 }
 
 function withAudit(state: MarketplaceState, entries: Omit<AuditEvent, "id" | "at">[]): MarketplaceState {
@@ -139,13 +162,28 @@ const Ctx = createContext<Store | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
+  useEffect(() => {
+    if (isDemoApp()) return;
+    fetch("/api/db")
+      .then((r) => r.json())
+      .then((data: { listings?: Product[]; companies?: Company[]; accounts?: { id: string }[] }) => {
+        if (data.listings?.length) mergeListings(data.listings);
+        if (data.companies?.length) mergeCompanies(data.companies);
+        if (data.accounts?.length) mergeAccounts(data.accounts as Parameters<typeof mergeAccounts>[0]);
+      })
+      .catch(() => {
+        /* seed catalog */
+      });
+  }, []);
+
   const company = useMemo(() => {
+    const companies = allCompanies();
     const raw = companies.find((c) => c.id === state.currentCompanyId) ?? companies[0];
     return withTactic(raw, state.tactics);
   }, [state.currentCompanyId, state.tactics]);
 
   const setCompany = useCallback((id: string) => {
-    const next = companies.find((c) => c.id === id);
+    const next = allCompanies().find((c) => c.id === id);
     persist({
       ...memory,
       currentCompanyId: id,
@@ -163,6 +201,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const parseRfq = useCallback(async (query: string) => {
+    if (isDemoApp()) {
+      const rules = parseNeed(query);
+      return { need: rules, rules, llm: false, model: memory.llmModel };
+    }
     try {
       const res = await fetch("/api/rfq/parse", {
         method: "POST",
@@ -184,6 +226,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const launchRfq = useCallback(async (query: string, need: Need) => {
+    if (isDemoApp()) {
+      const { rfq, deals } = runRfq(
+        memory.currentCompanyId,
+        query,
+        need,
+        memory.reputations,
+        memory.lots,
+        memory.tactics,
+      );
+      persist(
+        withAudit(
+          { ...memory, rfqs: [rfq, ...memory.rfqs], deals: [...deals, ...memory.deals] },
+          [
+            { actor: "human", action: "Демо без Ollama", detail: query.slice(0, 220) },
+            { actor: "matcher", action: deals.length ? "Открыты комнаты" : "Карточка отказа", detail: `${deals.length} поставщиков`, ref: rfq.id },
+          ],
+        ),
+      );
+      return { rfq, deals, llm: false, model: memory.llmModel };
+    }
     try {
       const res = await fetch("/api/rfq", {
         method: "POST",
@@ -526,6 +588,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(KEY);
     } catch {
       /* ignore */
+    }
+    if (!isDemoApp()) {
+      void fetch("/api/db/reset", { method: "POST" }).catch(() => {
+        /* keep sqlite */
+      });
     }
   }, []);
 

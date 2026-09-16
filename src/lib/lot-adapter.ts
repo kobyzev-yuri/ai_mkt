@@ -1,6 +1,6 @@
+import { allProducts } from "./catalog";
 import { packingOf } from "./packing";
-import { products } from "./seed";
-import type { Lot } from "./types";
+import type { Lot, Product } from "./types";
 
 /** Typical 1C «Остатки складов» dump. Integrator owns the real connector. */
 export const DEMO_1C_CSV = `Код;Наименование;Артикул;Остаток;Ед;Кратность;Цена;МинЦена;Склад;Город;СрокДней;Партия;Сертификаты
@@ -90,7 +90,19 @@ export function parse1CCsv(text: string): ExternalLotRow[] {
   });
 }
 
-function collectIssues(row: ExternalLotRow, sellerId: string): { issues: SkipIssue[]; productName?: string; pack?: { packSize: number; packUnit: string } } {
+function catalogOf(catalog?: Product[]): Product[] {
+  return catalog ?? allProducts();
+}
+
+function findListing(catalog: Product[], sellerId: string, article: string): Product | undefined {
+  return catalog.find((p) => p.sellerId === sellerId && p.sku === article);
+}
+
+function collectIssues(
+  row: ExternalLotRow,
+  sellerId: string,
+  catalog: Product[],
+): { issues: SkipIssue[]; productName?: string; pack?: { packSize: number; packUnit: string } } {
   const issues: SkipIssue[] = [];
   if (row.unit === "усл" || /доставк|услуг/i.test(row.name)) {
     issues.push({
@@ -116,7 +128,7 @@ function collectIssues(row: ExternalLotRow, sellerId: string): { issues: SkipIss
       owner: "supplier",
     });
   }
-  const product = products.find((p) => p.sellerId === sellerId && p.sku === row.sku);
+  const product = findListing(catalog, sellerId, row.sku);
   if (!product) {
     issues.push({
       code: "no_sku",
@@ -139,16 +151,21 @@ function collectIssues(row: ExternalLotRow, sellerId: string): { issues: SkipIss
   return { issues, productName: product.name, pack };
 }
 
-export function adapt1CRows(rows: ExternalLotRow[], sellerId: string): { ok: AdaptOk[]; skipped: AdaptSkip[] } {
+export function adapt1CRows(
+  rows: ExternalLotRow[],
+  sellerId: string,
+  catalog?: Product[],
+): { ok: AdaptOk[]; skipped: AdaptSkip[] } {
+  const products = catalogOf(catalog);
   const ok: AdaptOk[] = [];
   const skipped: AdaptSkip[] = [];
   for (const row of rows) {
-    const { issues, productName, pack } = collectIssues(row, sellerId);
+    const { issues, productName, pack } = collectIssues(row, sellerId, products);
     if (issues.length) {
       skipped.push({ row, issues });
       continue;
     }
-    const product = products.find((p) => p.sellerId === sellerId && p.sku === row.sku);
+    const product = findListing(products, sellerId, row.sku);
     if (!product || !pack) continue;
     const qty = Math.floor(row.qty / pack.packSize) * pack.packSize;
     const packNote =
@@ -180,3 +197,4 @@ export function adapt1CRows(rows: ExternalLotRow[], sellerId: string): { ok: Ada
   }
   return { ok, skipped };
 }
+

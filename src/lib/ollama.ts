@@ -1,6 +1,13 @@
+import { isDemoApp } from "./app-mode";
+
 export const OLLAMA_HOST = process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434";
 
 export const DEFAULT_MODEL = "qwen2.5:14b";
+
+/** Демо-прогон не должен будить systemd-сокет Ollama запросом на :11434. */
+export function ollamaEnabled(): boolean {
+  return !isDemoApp();
+}
 
 export const OLLAMA_MODELS = [
   { id: "qwen2.5:14b", label: "Qwen 2.5 14B", hint: "по умолчанию, быстрее" },
@@ -36,6 +43,9 @@ export async function ollamaChat(opts: {
   timeoutMs?: number;
   json?: boolean;
 }): Promise<string> {
+  if (!ollamaEnabled()) {
+    throw new Error("ollama skipped in demo");
+  }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 90_000);
   try {
@@ -66,6 +76,9 @@ export async function ollamaChat(opts: {
 }
 
 export async function listOllamaModels(): Promise<string[]> {
+  if (!ollamaEnabled()) {
+    return [...OLLAMA_MODELS.map((m) => m.id)];
+  }
   try {
     const res = await fetch(`${OLLAMA_HOST}/api/tags`, { cache: "no-store" });
     if (!res.ok) return [...OLLAMA_MODELS.map((m) => m.id)];

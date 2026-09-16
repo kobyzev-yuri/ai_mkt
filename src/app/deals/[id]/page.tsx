@@ -9,6 +9,7 @@ import { RejectCardView } from "@/components/reject-card";
 import { companyById, productById } from "@/lib/agents";
 import { compactRub, days, dealStatusLabel, deliveryLine, qty, rub, when } from "@/lib/format";
 import { partnerMemo } from "@/lib/partner-memo";
+import { useSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
 import type { Actor, Deal, Order, TrustScore } from "@/lib/types";
 import { tacticLabel } from "@/lib/bargain";
@@ -16,14 +17,17 @@ import { veilChat } from "@/lib/veil-chat";
 
 export default function DealRoomPage() {
   const { id } = useParams<{ id: string }>();
+  const { account } = useSession();
   const { deals, orders, reputations, approveDeal, rejectDeal, company } = useStore();
   const deal = deals.find((d) => d.id === id);
+  const desk = account?.desk;
+  const back = desk === "office" ? "/office" : desk === "sell" || company.role === "seller" ? "/sell" : "/buy";
 
   if (!deal) {
     return (
       <div className="mx-auto max-w-6xl px-5 py-16">
         <p className="text-muted">Комната не найдена. Возможно, демо сброшено.</p>
-        <Link href="/deals" className="mt-4 inline-block text-brass">
+        <Link href={back} className="mt-4 inline-block text-brass">
           К сделкам
         </Link>
       </div>
@@ -36,6 +40,8 @@ export default function DealRoomPage() {
       deal={deal}
       deals={deals}
       companyId={company.id}
+      back={back}
+      observer={desk === "office"}
       onApprove={approveDeal}
       onReject={rejectDeal}
       orders={orders}
@@ -48,6 +54,8 @@ function Room({
   deal,
   deals,
   companyId,
+  back,
+  observer,
   onApprove,
   onReject,
   orders,
@@ -56,6 +64,8 @@ function Room({
   deal: Deal;
   deals: Deal[];
   companyId: string;
+  back: string;
+  observer: boolean;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
   orders: Order[];
@@ -76,8 +86,8 @@ function Room({
 
   const visible = deal.messages.slice(0, shown);
   const playing = deal.playback && shown < deal.messages.length;
-  const iAmSeller = companyId === deal.sellerId;
-  const iAmParty = companyId === deal.buyerId || companyId === deal.sellerId;
+  const iAmSeller = !observer && companyId === deal.sellerId;
+  const iAmParty = !observer && (companyId === deal.buyerId || companyId === deal.sellerId);
   const viewer = iAmSeller ? "seller" : "buyer";
   const canApprove = !playing && deal.status === "agreed" && iAmParty;
   const canReject =
@@ -96,8 +106,8 @@ function Room({
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-8 px-5 py-10 lg:grid-cols-[1.15fr_0.85fr]">
       <section>
-        <Link href="/deals" className="font-mono text-[11px] uppercase tracking-widest text-muted">
-          ← Все комнаты
+        <Link href={back} className="font-mono text-[11px] uppercase tracking-widest text-muted">
+          {observer ? "← К очередям бэкофиса" : "← К текущим сделкам"}
         </Link>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Badge tone={deal.status === "rejected" ? "terra" : deal.status === "approved" ? "moss" : "live"}>
@@ -193,7 +203,7 @@ function Room({
       </section>
 
       <aside className="space-y-4">
-        <PartnerMemoCard memo={memo} name={counterparty.short} />
+        {observer ? null : <PartnerMemoCard memo={memo} name={counterparty.short} />}
         <div className="border border-line bg-surface p-5">
           <p className="font-mono text-[10px] uppercase tracking-widest text-muted">
             {iAmSeller ? "Лестница и ваш пол" : "Условия на столе"}
@@ -224,6 +234,7 @@ function Room({
           </dl>
         </div>
 
+        {observer ? null : (
         <div className="border border-line bg-surface p-5">
           <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Ваш мандат</p>
           <p className="mt-3 text-[13px] leading-relaxed text-muted">
@@ -238,6 +249,7 @@ function Room({
             Стиль торга виден. Пол, маржа и потолок — нет.
           </p>
         </div>
+        )}
 
         <div className="border border-line bg-surface p-5">
           <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Почему этот подбор</p>

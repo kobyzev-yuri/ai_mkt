@@ -9,21 +9,25 @@ import { Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
 import { compactRub, days, deliveryLine, num, orderStatusLabel, qty, rub, when } from "@/lib/format";
 import { packLabel } from "@/lib/packing";
+import { useSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
 import { trustOf } from "@/lib/trust";
 import type { IncidentKind, Order } from "@/lib/types";
 
 export default function OrderPage() {
   const { id } = useParams<{ id: string }>();
+  const { account } = useSession();
   const { orders, company, reputations, payAdvance, acceptDelivery, payRemainder, returnLotsToShowcase, reportIncident, acceptIncidentRemedy, escalateOrderIncident, resolveOnPlatform } =
     useStore();
   const order = orders.find((o) => o.id === id);
+  const desk = account?.desk;
+  const back = desk === "office" ? "/office" : desk === "sell" || company.role === "seller" ? "/sell" : "/buy";
   if (!order) {
     return (
       <div className="mx-auto max-w-6xl px-5 py-16">
         <p className="text-muted">Заказ не найден.</p>
-        <Link href="/orders" className="mt-4 inline-block text-brass">
-          К партиям
+        <Link href={back} className="mt-4 inline-block text-brass">
+          К сделкам
         </Link>
       </div>
     );
@@ -33,6 +37,8 @@ export default function OrderPage() {
       key={order.id + order.status}
       order={order}
       companyId={company.id}
+      back={back}
+      canArbitrate={desk === "office"}
       onPayAdvance={payAdvance}
       onAccept={acceptDelivery}
       onPayRemainder={payRemainder}
@@ -50,6 +56,8 @@ export default function OrderPage() {
 function Room({
   order,
   companyId,
+  back,
+  canArbitrate,
   onPayAdvance,
   onAccept,
   onPayRemainder,
@@ -63,6 +71,8 @@ function Room({
 }: {
   order: Order;
   companyId: string;
+  back: string;
+  canArbitrate: boolean;
   onPayAdvance: (id: string) => void;
   onAccept: (id: string) => void;
   onPayRemainder: (id: string) => void;
@@ -89,13 +99,13 @@ function Room({
 
   const visible = order.events.slice(0, order.playback ? shown : order.events.length);
   const playing = order.playback && shown < order.events.length;
-  const party = companyId === order.buyerId || companyId === order.sellerId;
+  const party = !canArbitrate && (companyId === order.buyerId || companyId === order.sellerId);
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-8 px-5 py-10 lg:grid-cols-[1.15fr_0.85fr]">
       <section>
-        <Link href="/orders" className="font-mono text-[11px] uppercase tracking-widest text-muted">
-          ← Все партии
+        <Link href={back} className="font-mono text-[11px] uppercase tracking-widest text-muted">
+          {canArbitrate ? "← К очередям бэкофиса" : "← К текущим сделкам"}
         </Link>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Badge tone={order.status === "settled" ? "moss" : "live"}>{orderStatusLabel(order.status)}</Badge>
@@ -174,6 +184,7 @@ function Room({
           <IncidentsPanel
             order={order}
             companyId={companyId}
+            canArbitrate={canArbitrate}
             onReport={onReport}
             onAccept={onAcceptRemedy}
             onEscalate={onEscalate}

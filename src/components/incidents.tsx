@@ -18,6 +18,7 @@ const STATUS: Record<Incident["status"], string> = {
 export function IncidentsPanel({
   order,
   companyId,
+  canArbitrate,
   onReport,
   onAccept,
   onEscalate,
@@ -25,13 +26,14 @@ export function IncidentsPanel({
 }: {
   order: Order;
   companyId: string;
+  canArbitrate?: boolean;
   onReport: (kind: IncidentKind) => void;
   onAccept: (id: string) => void;
   onEscalate: (id: string) => void;
   onPlatform: (id: string) => void;
 }) {
-  const isBuyer = companyId === order.buyerId;
-  const isSeller = companyId === order.sellerId;
+  const isBuyer = !canArbitrate && companyId === order.buyerId;
+  const isSeller = !canArbitrate && companyId === order.sellerId;
   const closed = order.status === "settled" || order.status === "cancelled";
   const kinds = closed ? [] : isBuyer ? BUYER_INCIDENT_KINDS : isSeller ? SELLER_INCIDENT_KINDS : [];
   const openKinds = new Set(
@@ -63,6 +65,7 @@ export function IncidentsPanel({
               key={inc.id}
               incident={inc}
               party={isBuyer || isSeller}
+              canArbitrate={Boolean(canArbitrate)}
               onAccept={() => onAccept(inc.id)}
               onEscalate={() => onEscalate(inc.id)}
               onPlatform={() => onPlatform(inc.id)}
@@ -71,9 +74,14 @@ export function IncidentsPanel({
         </ul>
       )}
 
-      {kinds.length === 0 && (
+      {kinds.length === 0 && !canArbitrate && (
         <p className="mt-4 font-mono text-[11px] text-muted">
           Переключите компанию на закупщика или поставщика этого заказа, чтобы принять обход или открыть претензию.
+        </p>
+      )}
+      {kinds.length === 0 && canArbitrate && (
+        <p className="mt-4 font-mono text-[11px] text-muted">
+          Стороны чинят сами 7 дней. Решение Atrium и рейтинг — только после эскалации.
         </p>
       )}
 
@@ -102,12 +110,14 @@ export function IncidentsPanel({
 function IncidentCard({
   incident,
   party,
+  canArbitrate,
   onAccept,
   onEscalate,
   onPlatform,
 }: {
   incident: Incident;
   party: boolean;
+  canArbitrate: boolean;
   onAccept: () => void;
   onEscalate: () => void;
   onPlatform: () => void;
@@ -142,7 +152,7 @@ function IncidentCard({
           </button>
         </div>
       )}
-      {party && incident.status === "escalated" && (
+      {canArbitrate && incident.status === "escalated" && (
         <button
           type="button"
           onClick={onPlatform}

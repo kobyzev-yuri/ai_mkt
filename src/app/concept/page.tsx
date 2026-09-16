@@ -62,7 +62,7 @@ export default function ConceptPage() {
             },
             {
               t: "Операции площадки",
-              d: "Претензия — факт в заказе, не переписка в мессенджере. Рейтинг бьём только после арбитража.",
+              d: "Бэкофис: номинал или факт оплаты, арбитраж после 7 дней сторон, онбординг SKU. Не сторона сделки.",
             },
             {
               t: "Собственник контура",
@@ -103,7 +103,7 @@ export default function ConceptPage() {
         <h2 className="font-display text-4xl">Кто на шине</h2>
         <p className="mt-3 mb-8 max-w-2xl text-[15px] text-muted">
           Роль видит свой срез мира и имеет ограниченный набор действий. Это контроль: нельзя «попросить модель закрыть
-          сделку».
+          сделку». <span className="text-brass-2">Латунь — агент</span>, <span className="text-terra">терракота — человек</span>.
         </p>
         <AgentBus active={["orchestrator", "buyer-agent", "seller-agent", "mandate"]} />
         <div className="mt-6 grid gap-3 md:grid-cols-2">

@@ -8,7 +8,11 @@ export default function ProcessPage() {
       <h1 className="mt-2 max-w-3xl font-display text-5xl leading-tight">От выгрузки 1С до закрытого заказа</h1>
       <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-muted">
         Документация контура для оператора площадки. Сначала поставщик кладёт партии на витрину. Потом поиск, мандат,
-        подпись человека. Живой прогон с выводом агентов — отдельная страница вне этого кабинета.
+        подпись человека. Живой прогон: <span className="font-mono text-paper">./start-demo.sh</span> →{" "}
+        <a href="http://127.0.0.1:3001/demo" className="font-mono text-brass">
+          http://127.0.0.1:3001/demo
+        </a>
+        , не кабинет на порту 3000.
       </p>
 
       <section className="mt-14">

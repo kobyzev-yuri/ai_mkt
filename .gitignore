@@ -41,6 +41,11 @@ yarn-error.log*
 __pycache__/
 *.py[cod]
 
+# sqlite (seeded on first marketplace request)
+/data/*.sqlite
+/data/*.sqlite-shm
+/data/*.sqlite-wal
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

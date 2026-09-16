@@ -1,4 +1,5 @@
 import type { Desk } from "./accounts";
+import type { NavBlock } from "./nav";
 import { companies } from "./seed";
 import { trustOf } from "./trust";
 import type { Company, CompanyRole, Deal, Order, TrustScore } from "./types";
@@ -12,33 +13,52 @@ export const WORKSPACES: { id: WorkspaceId; href: string; label: string; hint: s
   { id: "office", href: "/office", label: "Бэкофис", hint: "Платформа" },
 ];
 
-export const SUBNAV: Record<WorkspaceId, { href: string; label: string }[]> = {
+export const SUBNAV: Record<WorkspaceId, NavBlock[]> = {
   plaza: [
-    { href: "/", label: "Витрина" },
-    { href: "/catalog", label: "Каталог" },
-    { href: "/companies", label: "Участники" },
+    {
+      label: "",
+      items: [
+        { href: "/", label: "Витрина" },
+        { href: "/catalog", label: "Каталог" },
+        { href: "/companies", label: "Участники" },
+      ],
+    },
   ],
   buy: [
-    { href: "/buy", label: "Кабинет" },
-    { href: "/rfq", label: "Новая заявка" },
-    { href: "/deals", label: "Сделки" },
-    { href: "/orders", label: "Исполнение" },
+    { label: "Политика", items: [{ href: "/buy/mandate", label: "Мандат" }] },
+    { label: "Заявка", items: [{ href: "/rfq", label: "Новая заявка" }] },
+    {
+      label: "Контроль",
+      items: [{ href: "/buy", label: "Текущие сделки", match: ["/deals", "/orders"] }],
+    },
+    { label: "История", items: [{ href: "/buy/history", label: "Закрытые" }] },
+    { label: "Аналитика", items: [{ href: "/buy/analytics", label: "Показатели" }] },
   ],
   sell: [
-    { href: "/sell", label: "Кабинет" },
-    { href: "/deals", label: "Сделки" },
-    { href: "/orders", label: "Исполнение" },
-    { href: "/sell/catalog", label: "Витрина" },
-    { href: "/sell/adapter", label: "Адаптер 1С" },
+    { label: "Политика", items: [{ href: "/sell/mandate", label: "Мандат" }] },
+    {
+      label: "Витрина",
+      items: [
+        { href: "/sell/adapter", label: "Выгрузка 1С" },
+        { href: "/sell/lots", label: "Партии", match: ["/sell/catalog"] },
+      ],
+    },
+    {
+      label: "Контроль",
+      items: [{ href: "/sell", label: "Входящие сделки", match: ["/deals", "/orders"] }],
+    },
+    { label: "История", items: [{ href: "/sell/history", label: "Закрытые" }] },
+    { label: "Аналитика", items: [{ href: "/sell/analytics", label: "Показатели" }] },
   ],
   office: [
-    { href: "/office", label: "Обзор" },
-    { href: "/process", label: "Процессы" },
-    { href: "/office/flow", label: "Схема агентов" },
-    { href: "/concept", label: "Идеология" },
-    { href: "/office/settlement", label: "Расчёты" },
-    { href: "/trust", label: "Аналитика" },
-    { href: "/office/settings", label: "Настройки" },
+    { label: "Политика", items: [{ href: "/office/settings", label: "Правила" }] },
+    { label: "Расчёты", items: [{ href: "/office/settlement", label: "Рельсы оплаты" }] },
+    {
+      label: "Споры",
+      items: [{ href: "/office", label: "Арбитраж", match: ["/deals", "/orders"] }],
+    },
+    { label: "Поддержка", items: [{ href: "/office/nomenclature", label: "Номенклатура" }, { href: "/office/support", label: "Участники" }] },
+    { label: "Аналитика", items: [{ href: "/trust", label: "Показатели" }] },
   ],
 };
 
@@ -55,6 +75,7 @@ export function workspaceFromPath(pathname: string, role: CompanyRole = "buyer",
   if (pathname.startsWith("/deals") || pathname.startsWith("/orders") || pathname.startsWith("/dashboard")) {
     if (desk === "sell") return "sell";
     if (desk === "buy") return "buy";
+    if (desk === "office") return "office";
     return role === "seller" ? "sell" : "buy";
   }
   return "plaza";

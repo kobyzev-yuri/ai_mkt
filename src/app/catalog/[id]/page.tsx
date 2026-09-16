@@ -101,7 +101,7 @@ export default function ProductPage() {
             </Link>
           ) : desk === "sell" ? (
             <Link
-              href={seller.id === company.id ? "/sell/catalog" : "/sell"}
+              href={seller.id === company.id ? "/sell/lots" : "/sell"}
               className="mt-6 flex w-full items-center justify-center rounded-full border border-line py-3 text-[14px] text-paper hover:border-brass/50"
             >
               {seller.id === company.id ? "Это ваша витрина" : "Чужая позиция · вы поставщик"}

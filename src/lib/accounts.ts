@@ -19,7 +19,7 @@ export const ACCOUNTS: Account[] = [
     companyId: "co-kofe",
     org: "Кофейня Холдинг",
     person: "Закуп · Казань",
-    blurb: "Кабинет закупщика. Заявки, комнаты, аванс и приёмка.",
+    blurb: "Мандат агента, новая заявка, контроль сделок, закрытые, аналитика.",
   },
   {
     id: "acc-teh",
@@ -28,7 +28,7 @@ export const ACCOUNTS: Account[] = [
     companyId: "co-teh",
     org: "ТехСтрой",
     person: "Смета · Москва",
-    blurb: "Кабинет закупщика. Прокат под график объекта.",
+    blurb: "Мандат агента, новая заявка, контроль сделок, закрытые, аналитика.",
   },
   {
     id: "acc-sever",
@@ -37,7 +37,7 @@ export const ACCOUNTS: Account[] = [
     companyId: "co-severpak",
     org: "СеверПак",
     person: "Крафт · Казань",
-    blurb: "Кабинет поставщика. Входящие сделки, витрина, адаптер 1С.",
+    blurb: "Мандат агента, выгрузка витрины, контроль сделок, закрытые, аналитика.",
   },
   {
     id: "acc-ural",
@@ -46,7 +46,7 @@ export const ACCOUNTS: Account[] = [
     companyId: "co-ural",
     org: "УралСталь",
     person: "Прокат · Челябинск",
-    blurb: "Кабинет поставщика. Жёсткий пол и отгрузка с базы.",
+    blurb: "Мандат агента, выгрузка витрины, контроль сделок, закрытые, аналитика.",
   },
   {
     id: "acc-owner",
@@ -55,12 +55,24 @@ export const ACCOUNTS: Account[] = [
     companyId: null,
     org: "Atrium",
     person: "Оператор площадки",
-    blurb: "Бэкофис площадки. Схема агентов, рельсы расчётов, аналитика. Не сторона сделки.",
+    blurb: "Посредник: номинал, арбитраж, номенклатура, реестр участников. Не сторона сделки.",
   },
 ];
 
+let extraAccounts: Account[] = [];
+
+export function allAccounts(): Account[] {
+  const map = new Map(ACCOUNTS.map((a) => [a.id, a]));
+  for (const a of extraAccounts) map.set(a.id, a);
+  return [...map.values()];
+}
+
+export function mergeAccounts(rows: Account[]) {
+  extraAccounts = rows.filter((a) => !ACCOUNTS.some((s) => s.id === a.id));
+}
+
 export function accountById(id: string): Account | undefined {
-  return ACCOUNTS.find((a) => a.id === id);
+  return allAccounts().find((a) => a.id === id);
 }
 
 export function deskHome(desk: Desk): string {
@@ -90,8 +102,6 @@ export function pathAllowed(desk: Desk, pathname: string): boolean {
       pathname.startsWith("/buy") ||
       pathname.startsWith("/sell") ||
       pathname.startsWith("/rfq") ||
-      pathname.startsWith("/deals") ||
-      pathname.startsWith("/orders") ||
       pathname.startsWith("/dashboard")
     );
   }
@@ -109,7 +119,7 @@ export function pathAllowed(desk: Desk, pathname: string): boolean {
 }
 
 export function navWorkspaces(desk: Desk): Array<"plaza" | "buy" | "sell" | "office"> {
-  if (desk === "buy") return ["plaza", "buy"];
-  if (desk === "sell") return ["plaza", "sell"];
-  return ["plaza", "office"];
+  if (desk === "buy") return ["buy"];
+  if (desk === "sell") return ["sell"];
+  return ["office"];
 }

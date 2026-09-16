@@ -5,17 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { deskHome, deskLabel, isDemoPath, isPublicPath, navWorkspaces, pathAllowed } from "@/lib/accounts";
 import { isDemoApp } from "@/lib/app-mode";
+import { navItemActive } from "@/lib/nav";
 import { OLLAMA_MODELS } from "@/lib/ollama";
 import { useSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
 import { SUBNAV, WORKSPACES, workspaceFromPath } from "@/lib/workspace";
-
-function subnavActive(href: string, pathname: string): boolean {
-  if (href === "/" || href === "/buy" || href === "/sell" || href === "/office") {
-    return pathname === href;
-  }
-  return pathname.startsWith(href);
-}
 
 function SignOutButton({ onLeave }: { onLeave: () => void }) {
   return (
@@ -45,6 +39,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const visible = WORKSPACES.filter((item) => !desk || navWorkspaces(desk).includes(item.id));
 
   useEffect(() => {
+    if (demoApp) return;
     fetch("/api/ollama/models")
       .then((r) => r.json())
       .then((data: { models?: { id: string; label: string }[] }) => {
@@ -53,7 +48,7 @@ export function Shell({ children }: { children: ReactNode }) {
       .catch(() => {
         /* keep static list */
       });
-  }, []);
+  }, [demoApp]);
 
   useEffect(() => {
     if (demoApp) return;
@@ -64,6 +59,13 @@ export function Shell({ children }: { children: ReactNode }) {
       return;
     }
     if (!pathAllowed(account.desk, pathname)) {
+      router.replace(deskHome(account.desk));
+      return;
+    }
+    if (
+      (account.desk === "buy" || account.desk === "sell") &&
+      (pathname === "/" || pathname.startsWith("/catalog"))
+    ) {
       router.replace(deskHome(account.desk));
     }
   }, [account, demoApp, hydrated, pathname, router]);
@@ -131,20 +133,22 @@ export function Shell({ children }: { children: ReactNode }) {
             </span>
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
-            {visible.map((item) => {
-              const active = ws === item.id;
-              return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className={`rounded-full px-3 py-1.5 text-[13px] transition ${
-                    active ? "bg-surface-2 text-paper" : "text-muted hover:text-paper"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
+            {visible.length > 1
+              ? visible.map((item) => {
+                  const active = ws === item.id;
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className={`rounded-full px-3 py-1.5 text-[13px] transition ${
+                        active ? "bg-surface-2 text-paper" : "text-muted hover:text-paper"
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })
+              : null}
           </nav>
           <div className="ml-auto flex items-center gap-2">
             <div className="hidden text-right sm:block">
@@ -173,35 +177,46 @@ export function Shell({ children }: { children: ReactNode }) {
             <SignOutButton onLeave={leave} />
           </div>
         </div>
-        <nav className="flex gap-1 overflow-x-auto border-t border-line px-4 py-2 md:hidden">
-          {visible.map((item) => (
-            <Link
-              key={item.id}
-              href={item.href}
-              className={`shrink-0 rounded-full px-3 py-1 text-[12px] ${
-                ws === item.id ? "bg-surface-2 text-paper" : "text-muted"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        {visible.length > 1 ? (
+          <nav className="flex gap-1 overflow-x-auto border-t border-line px-4 py-2 md:hidden">
+            {visible.map((item) => (
+              <Link
+                key={item.id}
+                href={item.href}
+                className={`shrink-0 rounded-full px-3 py-1 text-[12px] ${
+                  ws === item.id ? "bg-surface-2 text-paper" : "text-muted"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        ) : null}
         <nav className="border-t border-line bg-surface/40">
-          <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-2">
-            {SUBNAV[ws].map((item) => {
-              const active = subnavActive(item.href, pathname);
-              return (
-                <Link
-                  key={`${ws}-${item.href}`}
-                  href={item.href}
-                  className={`shrink-0 rounded-full px-3 py-1 text-[12px] ${
-                    active ? "text-brass-2" : "text-muted hover:text-paper"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
+          <div className="mx-auto flex max-w-6xl gap-5 overflow-x-auto px-4 py-2.5">
+            {SUBNAV[ws].map((block) => (
+              <div key={`${ws}-${block.label || block.items[0]?.href}`} className="shrink-0">
+                {block.label ? (
+                  <p className="px-1 font-mono text-[9px] uppercase tracking-[0.18em] text-muted">{block.label}</p>
+                ) : null}
+                <div className={`flex gap-1 ${block.label ? "mt-1" : ""}`}>
+                  {block.items.map((item) => {
+                    const active = navItemActive(item, pathname);
+                    return (
+                      <Link
+                        key={`${ws}-${item.href}`}
+                        href={item.href}
+                        className={`shrink-0 rounded-full px-3 py-1 text-[12px] ${
+                          active ? "text-brass-2" : "text-muted hover:text-paper"
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </nav>
       </header>
@@ -209,7 +224,11 @@ export function Shell({ children }: { children: ReactNode }) {
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-5 py-8 text-[12px] text-muted sm:flex-row sm:items-center sm:justify-between">
           <p>
-            {account.org} · {deskLabel(account.desk)}. Реплики — локальный Ollama; цены и рейтинг — движок.
+            {account.desk === "buy"
+              ? `${account.org} · закупки. Человек утверждает сделку, аванс, приёмку и остаток.`
+              : account.desk === "sell"
+                ? `${account.org} · поставки. Человек выкладывает партии, утверждает сделку и может вернуть резерв до аванса.`
+                : `${account.org} · бэкофис. Номинал, арбитраж, онбординг. Не сторона сделки.`}
           </p>
           <p className="font-mono text-[10px] uppercase tracking-widest">Не финансовая оферта</p>
         </div>

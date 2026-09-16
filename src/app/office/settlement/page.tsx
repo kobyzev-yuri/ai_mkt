@@ -21,14 +21,15 @@ export default function SettlementPage() {
       <h1 className="mt-2 font-display text-5xl leading-tight">Рельсы оплаты</h1>
       <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-muted">
         Не налик и не «корзина → карта». Протокол один: два счёта, два факта оплаты, склад после аванса. Меняется
-        только рельс денег. Интегратор привозит событие «оплачено»; движок заказа тот же.
+        только рельс денег. Крипто-P2P — тот же номинал: площадка не «становится банком», она ждёт событие «оплачено» и
+        отпускает товар/деньги по правилам спора. Интегратор привозит факт; движок заказа тот же.
       </p>
       <p className="mt-3 text-[13px] text-muted">
         Кейс: {SETTLEMENT_CASE.title}, {rub(SETTLEMENT_CASE.total)}, аванс {SETTLEMENT_CASE.prepayPct}% (
         {compactRub(SETTLEMENT_CASE.advance)}) · остаток {compactRub(SETTLEMENT_CASE.remainder)}. Живые кнопки оплаты —
         в{" "}
-        <Link href="/orders" className="text-brass">
-          исполнении
+        <Link href="/office" className="text-brass">
+          очереди бэкофиса
         </Link>
         , здесь только карта масштаба.
       </p>

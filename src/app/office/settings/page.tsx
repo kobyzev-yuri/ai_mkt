@@ -41,7 +41,7 @@ export default function OfficeSettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-12">
-      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Бэкофис · настройки</p>
+      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Политика · правила</p>
       <h1 className="mt-2 font-display text-5xl">Политика среды</h1>
       <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-muted">
         Мандат задаёт пол цены и автоутверждение. Модель пишет только реплики. Сброс возвращает демо-партии и комнаты.

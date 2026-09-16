@@ -5,7 +5,9 @@ import { packCount, packLabel, packingOf, snapToPack } from "./packing";
 import { parseNeed } from "./parse-need";
 import { trustOf } from "./trust";
 import { roundPrice, runBargain, tacticLabel, tacticOf, withTactic } from "./bargain";
-import { companies, lots as seedLots, products } from "./seed";
+import { allProducts } from "./catalog";
+import { allCompanies } from "./roster";
+import { lots as seedLots } from "./seed";
 import type {
   BargainFail,
   BargainTactic,
@@ -31,13 +33,13 @@ function concession(tone: Company["agent"]["tone"]): number {
 }
 
 export function companyById(id: string, tactics?: Record<string, BargainTactic>): Company {
-  const c = companies.find((x) => x.id === id);
+  const c = allCompanies().find((x) => x.id === id);
   if (!c) throw new Error(`Company ${id} not found`);
   return withTactic(c, tactics);
 }
 
 export function productById(id: string): Product {
-  const p = products.find((x) => x.id === id);
+  const p = allProducts().find((x) => x.id === id);
   if (!p) throw new Error(`Product ${id} not found`);
   return p;
 }
@@ -88,7 +90,7 @@ export function rankNeed(
   const hits: { product: Product; score: number; reasons: string[] }[] = [];
   const missRows: { score: number; shelf: boolean; card: RejectCard }[] = [];
 
-  for (const product of products) {
+  for (const product of allProducts()) {
     const seller = companyById(product.sellerId);
     const blob = `${product.name} ${product.category} ${product.tags.join(" ")} ${product.description}`.toLowerCase();
     let score = 0;

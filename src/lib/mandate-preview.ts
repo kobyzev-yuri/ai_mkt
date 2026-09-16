@@ -1,7 +1,8 @@
 import { compactRub, num, rub } from "./format";
 import { freeQty, lotsForProduct } from "./inventory";
 import { packingOf, snapToPack } from "./packing";
-import { lots as seedLots, products } from "./seed";
+import { allProducts } from "./catalog";
+import { lots as seedLots } from "./seed";
 import type { Lot, Need, Product } from "./types";
 
 /** Catalog list is the public market mark. Floor stays out of the buyer insurance screen. */
@@ -21,7 +22,7 @@ export interface MandatePreview {
 }
 
 function pickProduct(need: Need): Product | undefined {
-  const pool = need.category ? products.filter((p) => p.category === need.category) : products;
+  const pool = need.category ? allProducts().filter((p) => p.category === need.category) : allProducts();
   if (!pool.length) return undefined;
   const keys = [
     ...need.keywords,

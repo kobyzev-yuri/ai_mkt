@@ -13,8 +13,12 @@ export default function OfficeFlowPage() {
         не нужен.
       </p>
       <p className="mt-3 text-[13px] text-muted">
-        Кабинеты закупки и поставки не здесь — они работают с контрагентами. Живой прогон —{" "}
-        <span className="font-mono text-paper">./start-demo.sh</span> на порту 3001.
+        Кабинеты закупки и поставки не здесь — они работают с контрагентами. Живой прогон:{" "}
+        <span className="font-mono text-paper">./start-demo.sh</span> →{" "}
+        <a href="http://127.0.0.1:3001/demo" className="font-mono text-brass">
+          http://127.0.0.1:3001/demo
+        </a>
+        . Не порт 3000.
       </p>
       <div className="mt-10">
         <AgentGraphCanvas />

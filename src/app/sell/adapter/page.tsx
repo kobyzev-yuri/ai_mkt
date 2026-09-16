@@ -1,22 +1,39 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui";
+import { mergeListings } from "@/lib/catalog";
 import { num, qty, rub } from "@/lib/format";
 import { ADAPTER_MAP, DEMO_1C_CSV, SKIP_OWNER_LABEL, adapt1CRows, parse1CCsv } from "@/lib/lot-adapter";
-import { SELLER_ID, companies } from "@/lib/seed";
+import { SELLER_ID } from "@/lib/seed";
 import { useStore } from "@/lib/store";
+import type { Product } from "@/lib/types";
 
 export default function SellAdapterPage() {
   const { importAdaptedLots, lots, company } = useStore();
   const [csv, setCsv] = useState(DEMO_1C_CSV);
   const [done, setDone] = useState(0);
+  const [catalog, setCatalog] = useState<Product[] | undefined>();
+  const sellerId = company.role === "buyer" ? SELLER_ID : company.id;
 
-  const seller = companies.find((c) => c.id === SELLER_ID)!;
+  useEffect(() => {
+    fetch("/api/db")
+      .then((r) => r.json())
+      .then((data: { listings?: Product[] }) => {
+        if (data.listings?.length) {
+          mergeListings(data.listings);
+          setCatalog(data.listings);
+        }
+      })
+      .catch(() => {
+        /* seed catalog */
+      });
+  }, []);
+
   const parsed = useMemo(() => parse1CCsv(csv), [csv]);
-  const { ok, skipped } = useMemo(() => adapt1CRows(parsed, SELLER_ID), [parsed]);
-  const live = lots.filter((l) => l.id.startsWith("lot-adapt-")).length;
+  const { ok, skipped } = useMemo(() => adapt1CRows(parsed, sellerId, catalog), [parsed, sellerId, catalog]);
+  const live = lots.filter((l) => l.sellerId === sellerId && l.id.startsWith("lot-adapt-")).length;
 
   function apply() {
     importAdaptedLots(ok.map((x) => x.lot));
@@ -25,25 +42,19 @@ export default function SellAdapterPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-12">
-      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Поставки · интегратор</p>
-      <h1 className="mt-2 font-display text-5xl leading-tight">Адаптер склада</h1>
+      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Витрина · выгрузка 1С</p>
+      <h1 className="mt-2 font-display text-5xl leading-tight">Остатки из 1С</h1>
       <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-muted">
-        Пример, не продукт. {seller.name} выгрузил остатки из 1С. Коннектор и маппинг — работа интегратора. Площадка
-        принимает только канон партии: SKU уже есть, есть пол, остаток кратен паллете. Услуги и строки без пола
-        отбрасываются. Витрина, счёт и резерв не меняются, пока не нажмёте «Выложить».
+        На витрину идут только строки с SKU площадки, полом цены и кратностью паллеты. Услуги и строки без пола
+        отсекаются. Пока не нажмёте «Выложить», остатки не меняются.
       </p>
       <p className="mt-3 text-[13px] text-muted">
-        После приёма лоты появляются в{" "}
-        <Link href="/sell/catalog" className="text-brass">
-          витрине партий
+        После приёма лоты — в{" "}
+        <Link href="/sell/lots" className="text-brass">
+          партиях
         </Link>
-        {live ? ` · сейчас с адаптера: ${live}` : null}.
+        {live ? ` · с этой выгрузки: ${live}` : null}.
       </p>
-      {company.id !== SELLER_ID ? (
-        <p className="mt-3 border border-brass/40 bg-surface px-4 py-3 text-[13px] text-muted">
-          Партии лягут на {seller.short}. Активная организация ({company.short}) не меняется.
-        </p>
-      ) : null}
 
       <div className="mt-10 grid gap-3 sm:grid-cols-3">
         {ADAPTER_MAP.slice(0, 3).map((m) => (

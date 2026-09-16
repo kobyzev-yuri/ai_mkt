@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
+import { isDemoApp } from "@/lib/app-mode";
 import { listOllamaModels, OLLAMA_HOST, OLLAMA_MODELS } from "@/lib/ollama";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  if (isDemoApp()) {
+    return NextResponse.json({
+      host: OLLAMA_HOST,
+      live: false,
+      models: OLLAMA_MODELS.map((m) => ({ id: m.id, label: m.label, hint: m.hint })),
+    });
+  }
   const live = await listOllamaModels();
   const preferred = OLLAMA_MODELS.filter((m) => live.includes(m.id));
   const extra = live.filter((name) => !OLLAMA_MODELS.some((m) => m.id === name));

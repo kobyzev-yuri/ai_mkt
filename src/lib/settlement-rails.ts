@@ -1,6 +1,6 @@
 /** Same payment protocol, different money rails. Integrator wires the fact, not a new engine. */
 
-export type SettlementRailId = "direct" | "escrow" | "factor";
+export type SettlementRailId = "direct" | "escrow" | "factor" | "crypto";
 
 export interface SettlementStep {
   id: string;
@@ -82,6 +82,21 @@ export const SETTLEMENT_RAILS: SettlementRail[] = [
       { id: "pay", title: "Факт аванса", atrium: "payAdvance", money: "Как в прямом расчёте или на номинал" },
       { id: "ship", title: "Отгрузка", atrium: "резерв, ТТН, УПД", money: "Фактор выкупает остаток у СеверПака" },
       { id: "acc", title: "Приёмка + остаток", atrium: "payRemainder", money: "Покупатель платит фактору, не продавцу" },
+    ],
+  },
+  {
+    id: "crypto",
+    label: "Крипто-P2P",
+    hint: "Не продукт площадки. Тот же номинал: другой whoConfirms, тот же заказ.",
+    whoHolds: "Эскроу-адрес до акта / решения спора",
+    whoConfirms: "Кастодиан или наблюдатель сети → событие в шину",
+    sellerGetsPaid: "После приёмки или по правилам спора",
+    scale: "Не база B2B: нет выписки в 1С, спорный комплаенс, слабый след для УПД",
+    steps: [
+      { id: "inv", title: "Счёт аванса 40%", atrium: "invoice.advance = issued", money: "Адрес эскроу вместо р/с" },
+      { id: "pay", title: "Факт аванса", atrium: "payAdvance", money: "Поступление на эскроу, не к СеверПаку" },
+      { id: "ship", title: "Отгрузка", atrium: "резерв, ТТН, УПД", money: "Продавец ещё не получил аванс" },
+      { id: "acc", title: "Приёмка + остаток", atrium: "payRemainder", money: "Эскроу отпускает по акту или решению спора" },
     ],
   },
 ];

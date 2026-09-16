@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { createRfq } from "@/lib/agents";
+import { isDemoApp } from "@/lib/app-mode";
 import { voiceDeals } from "@/lib/llm-agents";
 import { allowedModel, DEFAULT_MODEL } from "@/lib/ollama";
 import { sanitizeNeed } from "@/lib/parse-need";
-import { companies } from "@/lib/seed";
+import { roster } from "@/lib/db/sqlite";
 import type { BargainTactic, Lot, Need, TrustScore } from "@/lib/types";
 
 export const maxDuration = 120;
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
     tactics?: Record<string, BargainTactic>;
   };
   const query = body.query?.trim() ?? "";
-  const buyer = companies.find((c) => c.id === body.buyerId);
+  const buyer = roster().companies.find((c) => c.id === body.buyerId);
   if (query.length < 3) {
     return NextResponse.json({ error: "too short" }, { status: 400 });
   }
@@ -32,6 +33,9 @@ export async function POST(req: Request) {
   const model = allowedModel(body.model ?? DEFAULT_MODEL);
   const need = sanitizeNeed(query, body.need);
   const { rfq, deals } = createRfq(buyer.id, query, need, body.reputations, body.lots, body.tactics);
+  if (isDemoApp()) {
+    return NextResponse.json({ rfq, deals, model, llm: false, need });
+  }
   const voiced = await voiceDeals(deals, model);
   const llm = voiced.some((d) => d.voicedBy);
   return NextResponse.json({ rfq, deals: voiced, model, llm, need });

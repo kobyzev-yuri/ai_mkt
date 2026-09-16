@@ -6,10 +6,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { ACCOUNTS, accountById, type Account } from "./accounts";
+import { accountById, allAccounts, mergeAccounts, type Account } from "./accounts";
+import { mergeCompanies } from "./roster";
 import { useStore } from "./store";
 
 const KEY = "atrium-session-v1";
@@ -87,21 +89,39 @@ const Ctx = createContext<SessionStore | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { setCompany } = useStore();
+  const [rosterAt, setRosterAt] = useState(0);
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const account = useMemo(() => (snap.accountId ? accountById(snap.accountId) ?? null : null), [snap.accountId]);
+  const account = useMemo(
+    () => (snap.accountId ? accountById(snap.accountId) ?? null : null),
+    [snap.accountId, rosterAt],
+  );
   const hydrated = useSyncExternalStore(noopSubscribe, clientTrue, serverFalse);
 
   useEffect(() => {
-    const next = read();
-    if (next.accountId !== memory.accountId) {
-      memory = next;
-      emit();
-    }
+    fetch("/api/db/roster")
+      .then((r) => r.json())
+      .then((data: { accounts?: Account[]; companies?: { id: string }[] }) => {
+        if (data.companies?.length) mergeCompanies(data.companies as Parameters<typeof mergeCompanies>[0]);
+        if (data.accounts?.length) mergeAccounts(data.accounts);
+        const next = read();
+        if (next.accountId !== memory.accountId) {
+          memory = next;
+          emit();
+        }
+        setRosterAt((n) => n + 1);
+      })
+      .catch(() => {
+        const next = read();
+        if (next.accountId !== memory.accountId) {
+          memory = next;
+          emit();
+        }
+      });
   }, []);
 
   const signIn = useCallback(
     (accountId: string, pin: string) => {
-      const acc = ACCOUNTS.find((a) => a.id === accountId && a.pin === pin.trim());
+      const acc = allAccounts().find((a) => a.id === accountId && a.pin === pin.trim());
       if (!acc) return false;
       persist({ accountId: acc.id });
       if (acc.companyId) setCompany(acc.companyId);
