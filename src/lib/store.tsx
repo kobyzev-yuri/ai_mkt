@@ -14,10 +14,11 @@ import { uid } from "./ids";
 import { acceptRemedy, escalateIncident, openIncident, platformResolve } from "./ops";
 import { BUYER_ID, SELLER_ID, companies, DEMO_PROMPTS, lots as seedLots, seedDeals, seedOrders, seedRfqs } from "./seed";
 import { DEFAULT_MODEL } from "./ollama";
+import { applyPolicy, bestAutoPass, policyOf } from "./policy";
 import { seedTrust } from "./trust";
-import type { AuditEvent, Company, Deal, IncidentKind, MarketplaceState, Order, Rfq } from "./types";
+import type { AuditEvent, Company, Deal, IncidentKind, MarketplaceState, Order, Rfq, TradePolicy } from "./types";
 
-const KEY = "atrium-marketplace-v4";
+const KEY = "atrium-marketplace-v5";
 
 const initial: MarketplaceState = {
   currentCompanyId: BUYER_ID,
@@ -30,6 +31,7 @@ const initial: MarketplaceState = {
   auditLog: [],
   lastBuyerId: BUYER_ID,
   lastSellerId: SELLER_ID,
+  policies: {},
 };
 
 function hydrate(parsed: Partial<MarketplaceState> & { currentCompanyId: string }): MarketplaceState {
@@ -44,6 +46,7 @@ function hydrate(parsed: Partial<MarketplaceState> & { currentCompanyId: string 
     auditLog: parsed.auditLog ?? [],
     lastBuyerId: parsed.lastBuyerId ?? BUYER_ID,
     lastSellerId: parsed.lastSellerId ?? SELLER_ID,
+    policies: parsed.policies ?? {},
   };
 }
 
@@ -93,6 +96,67 @@ function withAudit(state: MarketplaceState, entries: Omit<AuditEvent, "id" | "at
   };
 }
 
+function commitApprove(id: string, source: "human" | "policy", note?: string): string | undefined {
+  const deal = memory.deals.find((d) => d.id === id);
+  if (!deal) return undefined;
+  if (deal.status === "approved") return deal.orderId;
+  if (deal.status === "rejected") return undefined;
+  const rfq = memory.rfqs.find((r) => r.id === deal.rfqId);
+  const { order, lots } = createOrderFromDeal(deal, rfq, memory.lots);
+  const deals = memory.deals.map((d) =>
+    d.id === id
+      ? {
+          ...d,
+          status: "approved" as const,
+          playback: false,
+          orderId: order.id,
+          passedByPolicy: source === "policy",
+          policyNote: note,
+        }
+      : d,
+  );
+  const rfqs = memory.rfqs.map((r) =>
+    r.id === deal.rfqId ? { ...r, status: "awarded" as const, awardedDealId: id } : r,
+  );
+  persist(
+    withAudit(
+      { ...memory, deals, rfqs, orders: [order, ...memory.orders], lots },
+      [
+        {
+          actor: source === "policy" ? "mandate" : "human",
+          action: source === "policy" ? "Допуск: сделка без подписи" : "Утверждение сделки",
+          detail: `Заказ ${order.id}, аванс ${deal.prepayPct}%`,
+          constraint: source === "policy" ? note ?? "политика участника" : "Агенты не могут утвердить сделку сами",
+          ref: order.id,
+        },
+        {
+          actor: "orchestrator",
+          action: "Сценарий S2",
+          detail: "Исполнение: счёт → резерв → отгрузка. Склад ждёт аванс.",
+          ref: order.id,
+        },
+      ],
+    ),
+  );
+  return order.id;
+}
+
+function autoAwardIfAllowed(rfqId?: string) {
+  const pool = memory.deals.filter((d) => (rfqId ? d.rfqId === rfqId : true) && d.status === "agreed");
+  const byRfq = new Map<string, Deal[]>();
+  for (const d of pool) {
+    const list = byRfq.get(d.rfqId) ?? [];
+    list.push(d);
+    byRfq.set(d.rfqId, list);
+  }
+  for (const [id, list] of byRfq) {
+    const rfq = memory.rfqs.find((r) => r.id === id);
+    if (rfq?.status === "awarded") continue;
+    const pick = bestAutoPass(list, memory.orders, memory.reputations, memory.policies);
+    if (pick) commitApprove(pick.deal.id, "policy", pick.verdict.why);
+  }
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -122,6 +186,7 @@ type Store = MarketplaceState & {
   acceptIncidentRemedy: (orderId: string, incidentId: string) => void;
   escalateOrderIncident: (orderId: string, incidentId: string) => void;
   resolveOnPlatform: (orderId: string, incidentId: string) => void;
+  setPolicy: (patch: Partial<TradePolicy>) => void;
   resetDemo: () => void;
 };
 
@@ -130,10 +195,10 @@ const Ctx = createContext<Store | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const company = useMemo(
-    () => companies.find((c) => c.id === state.currentCompanyId) ?? companies[0],
-    [state.currentCompanyId],
-  );
+  const company = useMemo(() => {
+    const base = companies.find((c) => c.id === state.currentCompanyId) ?? companies[0];
+    return applyPolicy(base, policyOf(base, state.policies));
+  }, [state.currentCompanyId, state.policies]);
 
   const setCompany = useCallback((id: string) => {
     const next = companies.find((c) => c.id === id);
@@ -186,6 +251,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ],
         ),
       );
+      autoAwardIfAllowed(data.rfq.id);
       return { rfq: data.rfq, deals: data.deals, llm: Boolean(data.llm), model: data.model ?? memory.llmModel };
     } catch {
       const { rfq, deals } = runRfq(memory.currentCompanyId, query, undefined, memory.reputations);
@@ -198,6 +264,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ],
         ),
       );
+      autoAwardIfAllowed(rfq.id);
       return { rfq, deals, llm: false, model: memory.llmModel };
     }
   }, []);
@@ -229,39 +296,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return { rfq, deals: silenced };
   }, []);
 
-  const approveDeal = useCallback((id: string) => {
-    const deal = memory.deals.find((d) => d.id === id);
-    if (!deal) return undefined;
-    const rfq = memory.rfqs.find((r) => r.id === deal.rfqId);
-    const { order, lots } = createOrderFromDeal(deal, rfq, memory.lots);
-    const deals = memory.deals.map((d) =>
-      d.id === id ? { ...d, status: "approved" as const, playback: false, orderId: order.id } : d,
-    );
-    const rfqs = memory.rfqs.map((r) =>
-      r.id === deal.rfqId ? { ...r, status: "awarded" as const, awardedDealId: id } : r,
-    );
-    persist(
-      withAudit(
-        { ...memory, deals, rfqs, orders: [order, ...memory.orders], lots },
-        [
-          {
-            actor: "human",
-            action: "Утверждение сделки",
-            detail: `Заказ ${order.id}, аванс ${deal.prepayPct}%`,
-            constraint: "Агенты не могут утвердить сделку сами",
-            ref: order.id,
-          },
-          {
-            actor: "orchestrator",
-            action: "Сценарий S2",
-            detail: "Исполнение: счёт → резерв → отгрузка. Склад ждёт аванс.",
-            ref: order.id,
-          },
-        ],
-      ),
-    );
-    return order.id;
-  }, []);
+  const approveDeal = useCallback((id: string) => commitApprove(id, "human"), []);
 
   const rejectDeal = useCallback((id: string) => {
     persist(
@@ -400,12 +435,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       auditLog: [],
       lastBuyerId: BUYER_ID,
       lastSellerId: SELLER_ID,
+      policies: {},
     });
     try {
       localStorage.removeItem(KEY);
     } catch {
       /* ignore */
     }
+  }, []);
+
+  const setPolicy = useCallback((patch: Partial<TradePolicy>) => {
+    const base = companies.find((c) => c.id === memory.currentCompanyId) ?? companies[0];
+    const next = { ...policyOf(base, memory.policies), ...patch };
+    persist({
+      ...memory,
+      policies: { ...memory.policies, [memory.currentCompanyId]: next },
+    });
+    autoAwardIfAllowed();
   }, []);
 
   const value: Store = {
@@ -425,6 +471,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     acceptIncidentRemedy,
     escalateOrderIncident,
     resolveOnPlatform,
+    setPolicy,
     resetDemo,
   };
 

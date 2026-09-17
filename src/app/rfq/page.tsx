@@ -3,12 +3,11 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
-import { Badge } from "@/components/ui";
+import { OfferCompare } from "@/components/offer-compare";
 import { companyById, productById } from "@/lib/agents";
-import { compactRub, days, dealStatusLabel, num, qty, rub } from "@/lib/format";
+import { compactRub, days, num, qty, rub } from "@/lib/format";
 import { DEMO_PROMPTS } from "@/lib/seed";
 import { useStore } from "@/lib/store";
-import type { Deal } from "@/lib/types";
 
 function RfqInner() {
   const params = useSearchParams();
@@ -18,7 +17,7 @@ function RfqInner() {
 
 function RfqComposer({ preset }: { preset: string }) {
   const router = useRouter();
-  const { company, launchRfq, deals, rfqs, llmModel } = useStore();
+  const { company, launchRfq, deals, rfqs, orders, reputations, policies, llmModel } = useStore();
   const [query, setQuery] = useState(preset);
   const [phase, setPhase] = useState<"idle" | "parse" | "match" | "talk" | "done">("idle");
   const [rfqId, setRfqId] = useState<string | null>(null);
@@ -64,7 +63,7 @@ function RfqComposer({ preset }: { preset: string }) {
   const best = [...mine].filter((d) => d.status === "agreed" || d.status === "approved").sort((a, b) => b.score - a.score)[0];
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-5 py-12">
+    <div className="mx-auto w-full max-w-5xl px-5 py-12">
       <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Закупки · новая заявка</p>
       <h1 className="mt-2 font-display text-5xl leading-tight">Опишите, что нужно купить</h1>
       {company.role === "seller" ? (
@@ -137,10 +136,17 @@ function RfqComposer({ preset }: { preset: string }) {
           {mine.length === 0 ? (
             <p className="mt-6 text-muted">Агент не нашёл позиций с достаточным совпадением. Уточните категорию или SKU.</p>
           ) : (
-            <div className="mt-6 space-y-3">
-              {mine.map((d) => (
-                <DealRow key={d.id} deal={d} />
-              ))}
+            <div className="mt-6">
+              <p className="mb-3 font-mono text-[11px] uppercase tracking-widest text-muted">
+                Сравнение КП · цена, срок, предоплата, поставка
+              </p>
+              <OfferCompare
+                deals={mine}
+                orders={orders}
+                reputations={reputations}
+                policies={policies}
+                viewerId={company.id}
+              />
             </div>
           )}
           {best && (
@@ -203,29 +209,6 @@ function NeedStrip({
         {city ? ` · ${city}` : ""}
       </p>
     </div>
-  );
-}
-
-function DealRow({ deal }: { deal: Deal }) {
-  const product = productById(deal.productId);
-  const seller = companyById(deal.sellerId);
-  return (
-    <Link href={`/deals/${deal.id}`} className="block border border-line bg-surface p-4 hover:border-brass/40">
-      <div className="flex items-center justify-between gap-3">
-        <Badge
-          tone={deal.status === "agreed" || deal.status === "approved" ? "moss" : deal.status === "rejected" ? "terra" : "live"}
-        >
-          {dealStatusLabel(deal.status)}
-        </Badge>
-        <span className="font-mono text-[11px] text-muted">оценка {deal.score}</span>
-      </div>
-      <p className="mt-2 font-display text-xl">{seller.short}</p>
-      <p className="text-[13px] text-muted">{product.name}</p>
-      <p className="mt-2 font-mono text-[12px] text-brass">
-        {rub(deal.currentPrice)} / {product.unit} · {compactRub(deal.currentPrice * deal.qty)}
-      </p>
-      <p className="mt-2 text-[12px] text-muted">{deal.matchReasons.slice(0, 2).join(" · ")}</p>
-    </Link>
   );
 }
 

@@ -24,7 +24,7 @@ export const SUBNAV: Record<WorkspaceId, { href: string; label: string }[]> = {
     { href: "/orders", label: "Исполнение" },
   ],
   sell: [
-    { href: "/sell", label: "Кабинет" },
+    { href: "/sell", label: "Лиды" },
     { href: "/deals", label: "Сделки" },
     { href: "/orders", label: "Исполнение" },
     { href: "/sell/catalog", label: "Витрина" },

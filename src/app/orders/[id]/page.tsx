@@ -4,18 +4,21 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Pipeline } from "@/components/pipeline";
+import { DocumentPack } from "@/components/document-pack";
 import { IncidentsPanel } from "@/components/incidents";
+import { PartnerContextCard } from "@/components/partner-context";
 import { Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
 import { compactRub, days, deliveryLine, num, orderStatusLabel, qty, rub, when } from "@/lib/format";
 import { packLabel } from "@/lib/packing";
+import { partnerDossier } from "@/lib/partner-context";
 import { useStore } from "@/lib/store";
 import { trustOf } from "@/lib/trust";
 import type { IncidentKind, Order } from "@/lib/types";
 
 export default function OrderPage() {
   const { id } = useParams<{ id: string }>();
-  const { orders, company, reputations, payAdvance, acceptDelivery, payRemainder, reportIncident, acceptIncidentRemedy, escalateOrderIncident, resolveOnPlatform } =
+  const { orders, deals, company, reputations, payAdvance, acceptDelivery, payRemainder, reportIncident, acceptIncidentRemedy, escalateOrderIncident, resolveOnPlatform } =
     useStore();
   const order = orders.find((o) => o.id === id);
   if (!order) {
@@ -42,6 +45,8 @@ export default function OrderPage() {
       onPlatform={(incId) => resolveOnPlatform(order.id, incId)}
       sellerScore={trustOf(order.sellerId, reputations).score}
       buyerScore={trustOf(order.buyerId, reputations).score}
+      sellerDossier={partnerDossier(order.buyerId, order.sellerId, deals, orders, reputations)}
+      buyerDossier={partnerDossier(order.sellerId, order.buyerId, deals, orders, reputations)}
     />
   );
 }
@@ -58,6 +63,8 @@ function Room({
   onPlatform,
   sellerScore,
   buyerScore,
+  sellerDossier,
+  buyerDossier,
 }: {
   order: Order;
   companyId: string;
@@ -70,6 +77,8 @@ function Room({
   onPlatform: (id: string) => void;
   sellerScore: number;
   buyerScore: number;
+  sellerDossier: ReturnType<typeof partnerDossier>;
+  buyerDossier: ReturnType<typeof partnerDossier>;
 }) {
   const product = productById(order.productId);
   const seller = companyById(order.sellerId);
@@ -207,17 +216,9 @@ function Room({
             </p>
           </div>
         )}
-        <div className="border border-line bg-surface p-5">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Документы</p>
-          <ul className="mt-3 space-y-2 text-[13px]">
-            {order.documents.map((d) => (
-              <li key={d.id} className="flex justify-between gap-3">
-                <span>{d.title}</span>
-                <span className="font-mono text-[11px] text-muted">{d.ref}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <DocumentPack order={order} />
+        <PartnerContextCard dossier={sellerDossier} href={`/companies/${order.sellerId}`} />
+        <PartnerContextCard dossier={buyerDossier} href={`/companies/${order.buyerId}`} />
         <p className="font-mono text-[11px] text-muted">
           {num(order.packCount)} грузовых мест · {qty(order.qty, product.unit)}
         </p>

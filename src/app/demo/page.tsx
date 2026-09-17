@@ -3,13 +3,18 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AgentBus } from "@/components/agent-bus";
+import { IdeaStub, MessengerPreview } from "@/components/idea-stub";
+import { OfferCompare } from "@/components/offer-compare";
 import { Pipeline } from "@/components/pipeline";
 import { AgentMark, Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
-import { compactRub, days, dealStatusLabel, deliveryLine, qty, rub } from "@/lib/format";
+import { compactRub, days, deliveryLine, qty, rub } from "@/lib/format";
+import { LEAD_LABEL, leadTag } from "@/lib/leads";
 import { parseNeed } from "@/lib/parse-need";
 import { DEMO_QUERY, type AgentRoleId } from "@/lib/scenarios";
+import { SELLER_ID } from "@/lib/seed";
 import { useStore } from "@/lib/store";
+import { STUBS } from "@/lib/stubs";
 import type { Deal, Order } from "@/lib/types";
 
 type Phase = "idle" | "parse" | "match" | "talk" | "gate" | "fulfill" | "incident" | "done";
@@ -63,6 +68,7 @@ export default function DemoPage() {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [msgShown, setMsgShown] = useState(0);
   const [caption, setCaption] = useState("Нажмите «Запустить прогон» — агенты пройдут S1 → S2 → S3 без ручной навигации.");
+  const [lens, setLens] = useState<"cycle" | "seller">("cycle");
   const abortRef = useRef<AbortController | null>(null);
 
   const deal = deals.find((d) => d.id === dealId);
@@ -73,15 +79,20 @@ export default function DemoPage() {
     return () => abortRef.current?.abort();
   }, []);
 
-  async function run() {
+  async function run(next: "cycle" | "seller" = "cycle") {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     const { signal } = ctrl;
+    setLens(next);
     setOrderId(null);
     setMsgShown(0);
     setPhase("parse");
-    setCaption("Парсер разбирает свободный текст. Числа, которых нет в заявке, не выдумываются.");
+    setCaption(
+      next === "seller"
+        ? "Заявка пришла на витрину СеверПака. Коммерция ещё не в WhatsApp — лид уже в комнате."
+        : "Парсер разбирает свободный текст. Числа, которых нет в заявке, не выдумываются.",
+    );
     try {
       const created = prepareShowcase(DEMO_QUERY);
       setRfqId(created.rfq.id);
@@ -91,11 +102,19 @@ export default function DemoPage() {
       await wait(900, signal);
 
       setPhase("match");
-      setCaption("Поиск свободных партий: наличие, кратность, город, поставки в срок. До трёх комнат параллельно.");
+      setCaption(
+        next === "seller"
+          ? "Три лида параллельно. Агент отвечает в мандате; выше автоутверждения — нужен человек, не бот."
+          : "Поиск свободных партий: наличие, кратность, город, поставки в срок. До трёх комнат параллельно.",
+      );
       await wait(1100, signal);
 
       setPhase("talk");
-      setCaption("Агенты торгуются в мандате. Движок считает цену; реплики — пояснение, не источник истины.");
+      setCaption(
+        next === "seller"
+          ? "Камера поставщика: агент «Крафт» торгуется, пол маржи не отдаёт. Сделка не уезжает в чат."
+          : "Агенты торгуются в мандате. Движок считает цену; реплики — пояснение, не источник истины.",
+      );
       if (best) {
         for (let i = 1; i <= best.messages.length; i += 1) {
           setMsgShown(i);
@@ -152,16 +171,24 @@ export default function DemoPage() {
       <h1 className="mt-2 font-display text-5xl leading-tight">Демо: агенты закрывают закупку</h1>
       <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted">
         Кофейня Холдинг закупает 50&nbsp;000 крафт-коробок. Агенты ищут партии, торгуются, резервируют склад и закрывают
-        срыв. Человек в этом прогоне подтверждает ключевые шаги — так видно, где автоматизация, а где контроль.
+        срыв. «Камера поставщика» — те же 30 секунд глазами СеверПака: лид, ответ в мандате, человек только на крупном.
       </p>
       <div className="mt-6 flex flex-wrap gap-3">
         <button
           type="button"
-          onClick={() => void run()}
+          onClick={() => void run("cycle")}
           disabled={busy}
           className="rounded-full bg-brass px-6 py-3 text-[14px] font-medium text-bg disabled:opacity-50"
         >
-          {busy ? "Идёт прогон…" : phase === "done" ? "Прогнать ещё раз" : "Запустить прогон"}
+          {busy && lens === "cycle" ? "Идёт прогон…" : phase === "done" && lens === "cycle" ? "Прогнать ещё раз" : "Запустить прогон"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void run("seller")}
+          disabled={busy}
+          className="rounded-full border border-brass/50 px-6 py-3 text-[14px] text-brass-2 disabled:opacity-50"
+        >
+          {busy && lens === "seller" ? "Камера…" : "Камера поставщика"}
         </button>
         {busy ? (
           <button type="button" onClick={stop} className="rounded-full border border-line px-5 py-3 text-[14px] text-muted">
@@ -222,15 +249,22 @@ export default function DemoPage() {
         </section>
 
         <aside className="space-y-4">
+          <SellerCamera rooms={rooms} highlight={lens === "seller"} />
           <div className="border border-line bg-bg p-5">
             <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Что делает человек</p>
             <ul className="mt-3 space-y-2 text-[13px] leading-relaxed text-muted">
-              <li className={phase === "gate" ? "text-paper" : ""}>01 · Утвердить условия, которые сошлись в мандате</li>
-              <li className={phase === "fulfill" ? "text-paper" : ""}>02 · Оплатить аванс — иначе склад стоит</li>
-              <li className={phase === "incident" || phase === "done" ? "text-paper" : ""}>
-                03 · Принять обход или эскалировать
+              <li className={phase === "gate" ? "text-paper" : ""}>
+                01 · Коммерция · утвердить условия, которые сошлись в мандате
               </li>
-              <li className={phase === "done" ? "text-paper" : ""}>04 · Подписать приёмку и оплатить остаток</li>
+              <li className={phase === "fulfill" ? "text-paper" : ""}>
+                02 · Казначейство · оплатить аванс — иначе склад стоит
+              </li>
+              <li className={phase === "incident" || phase === "done" ? "text-paper" : ""}>
+                03 · Операции · принять обход или эскалировать
+              </li>
+              <li className={phase === "done" ? "text-paper" : ""}>
+                04 · Склад / казначейство · подписать приёмку и оплатить остаток
+              </li>
             </ul>
           </div>
           {deal && (
@@ -289,26 +323,10 @@ function NeedBlock() {
 function MatchBlock({ rooms }: { rooms: Deal[] }) {
   return (
     <div>
-      <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Комнаты</p>
-      <ul className="mt-4 space-y-3">
-        {rooms.map((d) => {
-          const p = productById(d.productId);
-          const s = companyById(d.sellerId);
-          return (
-            <li key={d.id} className="border border-line px-3 py-3">
-              <div className="flex items-center justify-between gap-2">
-                <Badge tone={d.status === "agreed" ? "moss" : "live"}>{dealStatusLabel(d.status)}</Badge>
-                <span className="font-mono text-[11px] text-muted">оценка {d.score}</span>
-              </div>
-              <p className="mt-2 font-display text-xl">{s.short}</p>
-              <p className="text-[13px] text-muted">{p.name}</p>
-              <p className="mt-1 font-mono text-[12px] text-brass">
-                {rub(d.currentPrice)} / {p.unit} · {compactRub(d.currentPrice * d.qty)}
-              </p>
-            </li>
-          );
-        })}
-      </ul>
+      <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Сравнение КП</p>
+      <div className="mt-4">
+        <OfferCompare deals={rooms} />
+      </div>
     </div>
   );
 }
@@ -383,6 +401,46 @@ function FulfillBlock({ order, phase }: { order: Order; phase: Phase }) {
           Заказ закрыт. Партии списаны, аванс и остаток оплачены.
         </p>
       )}
+    </div>
+  );
+}
+
+function SellerCamera({ rooms, highlight }: { rooms: Deal[]; highlight: boolean }) {
+  const mine = rooms.filter((d) => d.sellerId === SELLER_ID);
+  const seller = companyById(SELLER_ID);
+  return (
+    <div className={`border bg-bg p-5 ${highlight ? "border-brass/50" : "border-line"}`}>
+      <p className="font-mono text-[10px] uppercase tracking-widest text-brass">Камера поставщика · {seller.short}</p>
+      <p className="mt-2 text-[13px] leading-relaxed text-muted">
+        Подходящие заявки приходят сами. Агент не продаёт ниже пола. Вам — только крупные или спорные лиды.
+      </p>
+      {mine.length === 0 ? (
+        <p className="mt-3 text-[13px] text-muted">После старта здесь появится входящий лид — не письмо в почте.</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {mine.map((d) => {
+            const tag = leadTag(d, seller);
+            const buyer = companyById(d.buyerId);
+            return (
+              <li key={d.id} className="flex items-center justify-between gap-2 text-[13px]">
+                <span>
+                  <Badge tone={tag === "needs-you" ? "brass" : tag === "missed" ? "terra" : "live"}>{LEAD_LABEL[tag]}</Badge>
+                  <span className="ml-2 text-muted">{buyer.short}</span>
+                </span>
+                <span className="font-mono text-brass">{compactRub(d.currentPrice * d.qty)}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className="mt-4">
+        <IdeaStub
+          stub={STUBS.messenger}
+          preview={
+            <MessengerPreview text="СеверПак, заявка: 50 000 коробок, Казань, бюджет 2,1 млн. Агент «Крафт» ответил в мандате. Открыть комнату." />
+          }
+        />
+      </div>
     </div>
   );
 }

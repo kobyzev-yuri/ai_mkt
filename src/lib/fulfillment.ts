@@ -96,7 +96,9 @@ export function createOrderFromDeal(deal: Deal, rfq: Rfq | undefined, lots: Lot[
       id: uid("doc"),
       kind: "spec",
       title: "Спецификация партии",
-      ref: `${packCount(deal.qty, product)} ${pack.packUnit}`,
+      ref: `${packCount(deal.qty, product)} ${pack.packUnit}${
+        allocated.ok ? `; партии ${allocated.allocations.map((a) => a.batchNo).join(", ")}` : ""
+      }`,
       at: now.toISOString(),
     },
     {

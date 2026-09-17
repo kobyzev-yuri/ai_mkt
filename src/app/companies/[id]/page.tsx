@@ -2,22 +2,26 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { PartnerContextCard } from "@/components/partner-context";
 import { ProductCard } from "@/components/product-card";
 import { Badge, Stat } from "@/components/ui";
 import { rating } from "@/lib/format";
+import { partnerDossier } from "@/lib/partner-context";
 import { companies, products } from "@/lib/seed";
 import { useStore } from "@/lib/store";
 import { trustOf } from "@/lib/trust";
 
 export default function CompanyPage() {
   const { id } = useParams<{ id: string }>();
-  const { reputations } = useStore();
+  const { company: viewer, deals, orders, reputations } = useStore();
   const company = companies.find((c) => c.id === id);
   if (!company) {
     return <div className="px-5 py-16 text-muted">Компания не найдена.</div>;
   }
   const catalog = products.filter((p) => p.sellerId === company.id);
   const trust = trustOf(company.id, reputations);
+  const dossier =
+    viewer.id === company.id ? null : partnerDossier(viewer.id, company.id, deals, orders, reputations);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-12">
@@ -37,6 +41,12 @@ export default function CompanyPage() {
         {company.city} · {company.industry} · ИНН {company.inn} · на площадке с {company.since} ·{" "}
         {company.dealsClosed} сделок
       </p>
+
+      {dossier ? (
+        <div className="mt-8">
+          <PartnerContextCard dossier={dossier} />
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-px border border-line bg-line sm:grid-cols-4">
         <Stat label="Отгрузки в срок" value={`${trust.onTimeShipPct}%`} hint="доля поставок без срыва" />

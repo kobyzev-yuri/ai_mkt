@@ -26,8 +26,8 @@ export default function HomePage() {
           <span className="text-brass"> Люди утверждают.</span>
         </h1>
         <p className="mt-6 max-w-xl text-[16px] leading-relaxed text-muted">
-          Опишите потребность своими словами. Агенты найдут свободные партии, согласуют условия в мандате и проведут
-          отгрузку. Человек утверждает оплату и приёмку.
+          Опишите потребность своими словами. Агенты найдут свободные партии и согласуют условия в мандате.
+          Поставщику заявки приходят сами — агент не отдаёт пол маржи, крупные лиды ждут человека.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
@@ -40,7 +40,7 @@ export default function HomePage() {
             href="/sell"
             className="rounded-full border border-line px-6 py-3 text-[14px] text-paper hover:border-brass/50"
           >
-            Кабинет поставщика
+            Кабинет поставщика — лиды
           </Link>
           <Link
             href="/office"
@@ -115,7 +115,7 @@ export default function HomePage() {
           </Link>
           {" · "}
           <Link href="/sell" className="text-brass">
-            Поставки →
+            Лиды поставщика →
           </Link>
           {" · "}
           <Link href="/office" className="text-brass">

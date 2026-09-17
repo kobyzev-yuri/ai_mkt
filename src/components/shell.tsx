@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { AlertsBell } from "@/components/alerts-bell";
 import { OLLAMA_MODELS } from "@/lib/ollama";
 import { companies } from "@/lib/seed";
 import { useStore } from "@/lib/store";
@@ -77,6 +78,7 @@ export function Shell({ children }: { children: ReactNode }) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-2">
+            {hydrated ? <AlertsBell /> : null}
             {hydrated && (
               <div className="hidden items-center gap-2 xl:flex">
                 <span className="live-dot h-1.5 w-1.5 rounded-full bg-moss" />

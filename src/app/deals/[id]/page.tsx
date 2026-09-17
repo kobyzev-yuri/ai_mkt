@@ -3,15 +3,19 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { DocumentPackPreview } from "@/components/document-pack";
+import { PartnerContextCard } from "@/components/partner-context";
 import { AgentMark, Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
 import { compactRub, days, dealStatusLabel, deliveryLine, qty, rub, when } from "@/lib/format";
+import { partnerDossier } from "@/lib/partner-context";
+import { autoPassVerdict } from "@/lib/policy";
 import { useStore } from "@/lib/store";
 import type { Actor, Deal } from "@/lib/types";
 
 export default function DealRoomPage() {
   const { id } = useParams<{ id: string }>();
-  const { deals, approveDeal, rejectDeal, company } = useStore();
+  const { deals, orders, reputations, policies, approveDeal, rejectDeal, company } = useStore();
   const deal = deals.find((d) => d.id === id);
 
   if (!deal) {
@@ -25,7 +29,18 @@ export default function DealRoomPage() {
     );
   }
 
-  return <Room key={deal.id} deal={deal} companyId={company.id} onApprove={approveDeal} onReject={rejectDeal} />;
+  return (
+    <Room
+      key={deal.id}
+      deal={deal}
+      companyId={company.id}
+      onApprove={approveDeal}
+      onReject={rejectDeal}
+      verdict={autoPassVerdict(deal, orders, reputations, policies)}
+      sellerDossier={partnerDossier(deal.buyerId, deal.sellerId, deals, orders, reputations)}
+      buyerDossier={partnerDossier(deal.sellerId, deal.buyerId, deals, orders, reputations)}
+    />
+  );
 }
 
 function Room({
@@ -33,11 +48,17 @@ function Room({
   companyId,
   onApprove,
   onReject,
+  verdict,
+  sellerDossier,
+  buyerDossier,
 }: {
   deal: Deal;
   companyId: string;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
+  verdict: ReturnType<typeof autoPassVerdict>;
+  sellerDossier: ReturnType<typeof partnerDossier>;
+  buyerDossier: ReturnType<typeof partnerDossier>;
 }) {
   const product = productById(deal.productId);
   const seller = companyById(deal.sellerId);
@@ -110,26 +131,41 @@ function Room({
         )}
 
         {canDecide && (
-          <div className="mt-8 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => onApprove(deal.id)}
-              className="rounded-full bg-brass px-5 py-2.5 text-[13px] font-medium text-bg"
-            >
-              Утвердить сделку
-            </button>
-            <button
-              type="button"
-              onClick={() => onReject(deal.id)}
-              className="rounded-full border border-line px-5 py-2.5 text-[13px] text-muted hover:text-terra"
-            >
-              Отклонить
-            </button>
+          <div className="mt-8 space-y-3">
+            {verdict.ok ? (
+              <p className="border border-moss/40 bg-surface px-4 py-3 text-[13px] text-moss">
+                Допуск совпал: {verdict.why}. Можно утвердить вручную или оставить политике — при смене режима
+                колокольчик снимет это с очереди.
+              </p>
+            ) : deal.status === "agreed" ? (
+              <p className="border border-brass/40 bg-surface px-4 py-3 text-[13px] text-brass">
+                Автопрохода нет: {verdict.why}. Колокольчик зовёт человека.
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => onApprove(deal.id)}
+                className="rounded-full bg-brass px-5 py-2.5 text-[13px] font-medium text-bg"
+              >
+                Утвердить сделку
+              </button>
+              <button
+                type="button"
+                onClick={() => onReject(deal.id)}
+                className="rounded-full border border-line px-5 py-2.5 text-[13px] text-muted hover:text-terra"
+              >
+                Отклонить
+              </button>
+            </div>
           </div>
         )}
         {deal.status === "approved" && (
           <p className="mt-8 border border-moss/40 bg-surface px-4 py-3 text-[14px] text-moss">
-            Сделка утверждена. Запущен контур исполнения: счёт, резерв партий, отгрузка.
+            {deal.passedByPolicy
+              ? `Сделка прошла по допуску. ${deal.policyNote ?? ""}`
+              : "Сделка утверждена человеком."}{" "}
+            Запущен контур исполнения: счёт, резерв партий, отгрузка.
             {deal.orderId ? (
               <>
                 {" "}
@@ -148,6 +184,9 @@ function Room({
       </section>
 
       <aside className="space-y-4">
+        <PartnerContextCard dossier={sellerDossier} href={`/companies/${deal.sellerId}`} />
+        <PartnerContextCard dossier={buyerDossier} href={`/companies/${deal.buyerId}`} />
+        <DocumentPackPreview />
         <div className="border border-line bg-surface p-5">
           <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Лестница цены</p>
           <div className="relative mt-6 h-2 rounded-full bg-line">

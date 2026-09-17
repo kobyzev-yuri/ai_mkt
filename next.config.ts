@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
+const demo = process.env.NEXT_PUBLIC_ATRIUM_APP === "demo";
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  distDir: demo ? ".next-demo" : ".next",
 };
 
 export default nextConfig;

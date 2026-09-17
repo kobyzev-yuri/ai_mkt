@@ -4,6 +4,8 @@ export type AgentPriority = "price" | "speed" | "quality";
 export type DealStatus = "open" | "countering" | "agreed" | "rejected" | "approved";
 export type RfqStatus = "matching" | "negotiating" | "awarded" | "closed";
 export type Actor = "buyer-agent" | "seller-agent" | "system" | "human";
+/** Как участник пускает сделку: сам каждый шаг, по допускам или автопилот в мандате. */
+export type ControlMode = "manual" | "threshold" | "auto";
 
 export interface AgentProfile {
   name: string;
@@ -12,6 +14,9 @@ export interface AgentProfile {
   priority: AgentPriority;
   minMarginPct: number;
   autoApproveBelow: number;
+  /** Порог доверия контрагента, ниже которого автопрохода нет. */
+  minTrustToAuto: number;
+  controlMode: ControlMode;
   responseMin: number;
 }
 
@@ -152,6 +157,9 @@ export interface Deal {
   matchReasons: string[];
   orderId?: string;
   voicedBy?: string;
+  /** Сделка утверждена допуском политики, а не кнопкой человека. */
+  passedByPolicy?: boolean;
+  policyNote?: string;
 }
 
 export interface Invoice {
@@ -284,6 +292,12 @@ export interface AuditEvent {
   ref?: string;
 }
 
+export interface TradePolicy {
+  controlMode: ControlMode;
+  autoApproveBelow: number;
+  minTrustToAuto: number;
+}
+
 export interface MarketplaceState {
   currentCompanyId: string;
   llmModel: string;
@@ -295,4 +309,6 @@ export interface MarketplaceState {
   auditLog: AuditEvent[];
   lastBuyerId: string;
   lastSellerId: string;
+  /** Живая политика участника поверх сида. Меняет сам кабинет, не бэкофис. */
+  policies: Record<string, TradePolicy>;
 }
