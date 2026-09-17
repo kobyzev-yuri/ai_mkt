@@ -6,12 +6,13 @@ import { Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
 import type { DbSnapshot } from "@/lib/db/types";
 import { compactRub, orderStatusLabel } from "@/lib/format";
+import { canUnwindIncident, unwindButtonLabel } from "@/lib/incident-desk";
 import { openDisputes, paymentWatch } from "@/lib/office-desk";
 import { useStore } from "@/lib/store";
 import { INCIDENT_LABEL } from "@/lib/trust";
 
 export default function OfficeHomePage() {
-  const { orders, resolveOnPlatform } = useStore();
+  const { orders, resolveOnPlatform, breakPaidOrder } = useStore();
   const disputes = openDisputes(orders);
   const escalated = disputes.filter((d) => d.incident.status === "escalated");
   const payments = paymentWatch(orders);
@@ -82,13 +83,24 @@ export default function OfficeHomePage() {
                       Комната претензии →
                     </Link>
                     {incident.status === "escalated" ? (
-                      <button
-                        type="button"
-                        onClick={() => resolveOnPlatform(order.id, incident.id)}
-                        className="rounded-full border border-terra/50 px-3 py-1.5 text-[12px] text-terra"
-                      >
-                        Решение Atrium
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => resolveOnPlatform(order.id, incident.id)}
+                          className="rounded-full border border-terra/50 px-3 py-1.5 text-[12px] text-terra"
+                        >
+                          Зафиксировать обход
+                        </button>
+                        {canUnwindIncident(order, incident) ? (
+                          <button
+                            type="button"
+                            onClick={() => breakPaidOrder(order.id, incident.id)}
+                            className="rounded-full border border-line px-3 py-1.5 text-[12px] text-paper"
+                          >
+                            {unwindButtonLabel(order, incident) ?? "Откат"}
+                          </button>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 </div>

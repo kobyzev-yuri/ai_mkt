@@ -211,6 +211,9 @@ export function applyAcceptance(order: Order): Order {
   const invoices = order.invoices.map((i) =>
     i.kind === "remainder" ? { ...i, status: "issued" as const } : i,
   );
+  const claims = (order.incidents ?? []).filter(
+    (i) => i.status === "resolved" && (i.kind === "shortage" || i.kind === "quality" || i.kind === "docs"),
+  );
   const events = [
     ...order.events,
     {
@@ -218,7 +221,9 @@ export function applyAcceptance(order: Order): Order {
       at: now.toISOString(),
       delayMs: 0,
       stage: "accept",
-      text: "Приёмка подписана. Расхождений по партиям нет.",
+      text: claims.length
+        ? "Приёмка подписана с актом по претензии. Зачёт уже сидит в остатке."
+        : "Приёмка подписана. Расхождений по партиям нет.",
     },
     {
       id: uid("ev"),
@@ -230,7 +235,7 @@ export function applyAcceptance(order: Order): Order {
   ];
   const documents: TradeDocument[] = [
     ...order.documents,
-    { id: uid("doc"), kind: "acceptance", title: "Акт приёмки", ref: "без претензий", at: now.toISOString() },
+    { id: uid("doc"), kind: "acceptance", title: "Акт приёмки", ref: claims.length ? "с актом по претензии" : "без претензий", at: now.toISOString() },
     {
       id: uid("doc"),
       kind: "invoice",

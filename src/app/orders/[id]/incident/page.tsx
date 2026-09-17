@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui";
 export default function OrderIncidentPage() {
   const { id } = useParams<{ id: string }>();
   const { account } = useSession();
-  const { orders, company, reportIncident, acceptIncidentRemedy, escalateOrderIncident, resolveOnPlatform } = useStore();
+  const { orders, company, reportIncident, acceptIncidentRemedy, escalateOrderIncident, resolveOnPlatform, breakPaidOrder } = useStore();
   const order = orders.find((o) => o.id === id);
 
   if (!order) {
@@ -41,8 +41,8 @@ export default function OrderIncidentPage() {
       </div>
       <h1 className="mt-3 font-display text-4xl leading-tight">{product.name}</h1>
       <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted">
-        Отдельный контур от торга. Здесь не листают «срыв / недостача / УПД» как клавиши на закрытой сделке. Факт → обход
-        агента → акцепт человека → при отказе арбитр площадки. {compactRub(order.total)}.
+        Отдельный контур от торга. Факт открывает плейбук кейса: агент сразу предлагает обход и, если он есть, откат.
+        Человек принимает обход или отклоняет на площадку. {compactRub(order.total)}.
       </p>
 
       <div className="mt-10">
@@ -54,6 +54,7 @@ export default function OrderIncidentPage() {
           onAccept={(incId) => acceptIncidentRemedy(order.id, incId)}
           onEscalate={(incId) => escalateOrderIncident(order.id, incId)}
           onPlatform={(incId) => resolveOnPlatform(order.id, incId)}
+          onBreakPaid={(incId) => breakPaidOrder(order.id, incId)}
         />
       </div>
     </div>

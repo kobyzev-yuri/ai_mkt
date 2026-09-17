@@ -84,7 +84,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <Link href="/demo" className="leading-none">
               <span className="font-display text-[1.65rem] tracking-wide text-brass-2">Atrium</span>
               <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.28em] text-muted">
-                три процесса
+                пять процессов
               </span>
             </Link>
             <nav className="flex shrink-0 items-center gap-2">

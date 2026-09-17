@@ -1,17 +1,9 @@
 import { uid } from "./ids";
-import { incidentRoles } from "./incident-desk";
-import { applyTrustHit, INCIDENT_LABEL, proposeRemedy, trustOf } from "./trust";
-import type { Incident, IncidentKind, Order, TrustScore } from "./types";
-
-const FACT: Record<IncidentKind, string> = {
-  delay_ship: "Отгрузка вышла за срок. На реальных площадках это сразу бьёт долю поставок в срок и открывает окно претензии.",
-  delay_pay: "Остаток или аванс не пришёл в срок. В B2B больше половины счетов просрочены — поставщик держит следующие лоты и поднимает предоплату.",
-  shortage: "При приёмке меньше, чем в накладной. Типовой обход: акт расхождения + зачёт + довоз, а не «подпишите как есть».",
-  quality: "Партия не бьётся со спецификацией/паспортом. Нужны фото, акт, иногда лаборатория. Без доказательств платформа претензию не берёт.",
-  docs: "Нет УПД или расхождение с отгрузкой. Без закрывающих сделка «закрыта» только на бумаге склада.",
-  stock_miss: "Свободный остаток в каталоге оказался призраком. 28–33% B2B-заказов ломаются из-за неверного стока.",
-  force_majeure: "Погода, простой комбината, перекрытая трасса. Рейтинг не трогаем, если есть документ; иначе это обычный срыв.",
-};
+import { advancePaid, contourClosed, incidentRoles } from "./incident-desk";
+import { playbookOf, proposeRemedy, unwindModeOf } from "./incident-playbook";
+import { releaseLots } from "./inventory";
+import { applyTrustHit, INCIDENT_LABEL, trustOf } from "./trust";
+import type { Incident, IncidentKind, Lot, Order, TrustScore } from "./types";
 
 export function openIncident(
   order: Order,
@@ -20,6 +12,7 @@ export function openIncident(
   delayDays = 2,
 ): Order {
   if ((order.incidents ?? []).some((i) => i.kind === kind && i.status !== "resolved")) return order;
+  const book = playbookOf(kind);
   const incident: Incident = {
     id: uid("inc"),
     orderId: order.id,
@@ -27,9 +20,9 @@ export function openIncident(
     raisedBy,
     at: new Date().toISOString(),
     status: "negotiating",
-    fact: FACT[kind],
+    fact: book.life,
     delayDays,
-    proposed: proposeRemedy(kind, delayDays, order.total),
+    proposed: book.workaround(order, delayDays),
   };
   const roles = incidentRoles(incident, { ...order, incidents: [...(order.incidents ?? []), incident] });
   return {
@@ -52,41 +45,14 @@ export function openIncident(
 export function acceptRemedy(order: Order, incidentId: string): Order {
   const inc = order.incidents.find((i) => i.id === incidentId);
   if (!inc || inc.status === "resolved") return order;
-  let invoices = order.invoices;
-  if (inc.proposed.amount && (inc.proposed.kind === "price_cut" || inc.proposed.kind === "credit_note")) {
-    invoices = invoices.map((inv) =>
-      inv.kind === "remainder" && inv.status !== "paid"
-        ? { ...inv, amount: Math.max(0, inv.amount - (inc.proposed.amount ?? 0)) }
-        : inv,
-    );
-  }
-  if (inc.proposed.amount && inc.proposed.kind === "penalty_hold") {
-    invoices = invoices.map((inv) =>
-      inv.kind === "remainder" && inv.status !== "paid"
-        ? { ...inv, amount: inv.amount + (inc.proposed.amount ?? 0) }
-        : inv,
-    );
-  }
-  const etaBump = inc.proposed.extraDays ?? 0;
+  const applied = playbookOf(inc.kind).applyContinue(order, inc);
   return {
-    ...order,
-    invoices,
-    shipments: order.shipments.map((s) =>
-      etaBump && s.status !== "arrived" ? { ...s, etaDays: s.etaDays + etaBump } : s,
+    ...applied,
+    incidents: applied.incidents.map((i) =>
+      i.id === incidentId
+        ? { ...i, status: "resolved" as const, resolution: `Принято без площадки: ${i.proposed.text}` }
+        : i,
     ),
-    incidents: order.incidents.map((i) =>
-      i.id === incidentId ? { ...i, status: "resolved" as const, resolution: `Принято: ${i.proposed.text}` } : i,
-    ),
-    events: [
-      ...order.events,
-      {
-        id: uid("ev"),
-        at: new Date().toISOString(),
-        delayMs: 0,
-        stage: "dispute",
-        text: "Человек заявителя принял обход. Площадка не входит, рейтинг не трогаем.",
-      },
-    ],
   };
 }
 
@@ -100,7 +66,8 @@ export function escalateIncident(order: Order, incidentId: string): Order {
         ? {
             ...i,
             status: "escalated" as const,
-            resolution: "Эскалация на Atrium. Решение площадки по доказательствам в заказе (переписка, накладная, УПД), не по устным договорённостям.",
+            resolution:
+              "Эскалация на Atrium. Решение площадки по доказательствам в заказе (переписка, накладная, УПД), не по устным договорённостям.",
           }
         : i,
     ),
@@ -117,6 +84,11 @@ export function escalateIncident(order: Order, incidentId: string): Order {
   };
 }
 
+function trustTarget(order: Order, inc: Incident): { role: "buyer" | "seller"; id: string } {
+  const role: "buyer" | "seller" = inc.kind === "delay_pay" ? "buyer" : "seller";
+  return { role, id: role === "buyer" ? order.buyerId : order.sellerId };
+}
+
 export function platformResolve(
   order: Order,
   incidentId: string,
@@ -124,15 +96,11 @@ export function platformResolve(
 ): { order: Order; reputations: Record<string, TrustScore> } {
   const inc = order.incidents.find((i) => i.id === incidentId);
   if (!inc) return { order, reputations };
-  const sellerHit = inc.kind === "delay_pay" ? "buyer" : "seller";
-  const targetId = sellerHit === "buyer" ? order.buyerId : order.sellerId;
+  const hit = trustTarget(order, inc);
   const nextRep =
     inc.kind === "force_majeure"
       ? reputations
-      : {
-          ...reputations,
-          [targetId]: applyTrustHit(trustOf(targetId, reputations), inc.kind, sellerHit),
-        };
+      : { ...reputations, [hit.id]: applyTrustHit(trustOf(hit.id, reputations), inc.kind, hit.role) };
   const withMoney = acceptRemedy(order, incidentId);
   return {
     reputations: nextRep,
@@ -146,10 +114,63 @@ export function platformResolve(
               resolution:
                 inc.kind === "force_majeure"
                   ? "Решение Atrium: срок сдвинут по форс-мажору, рейтинг не трогаем — есть документ в контуре."
-                  : `Решение Atrium: обход принят, рейтинг ${sellerHit === "buyer" ? "закупщика" : "поставщика"} обновлён.`,
+                  : `Решение Atrium: обход зафиксирован, рейтинг ${hit.role === "buyer" ? "закупщика" : "поставщика"} обновлён.`,
             }
           : i,
       ),
     },
   };
 }
+
+/** Walk away: unpaid unreserve or paid refund. Kind-specific copy. */
+export function platformUnwind(
+  order: Order,
+  incidentId: string,
+  lots: Lot[],
+  reputations: Record<string, TrustScore>,
+): { order: Order; lots: Lot[]; reputations: Record<string, TrustScore> } {
+  const inc = order.incidents.find((i) => i.id === incidentId);
+  if (!inc || contourClosed(order)) return { order, lots, reputations };
+  const mode = unwindModeOf(order, inc.kind);
+  if (mode === "none") return { order, lots, reputations };
+  if (mode === "paid" && !advancePaid(order)) return { order, lots, reputations };
+  if (mode === "unpaid" && advancePaid(order)) return { order, lots, reputations };
+  const hit = trustTarget(order, inc);
+  const nextRep =
+    inc.kind === "force_majeure"
+      ? reputations
+      : { ...reputations, [hit.id]: applyTrustHit(trustOf(hit.id, reputations), inc.kind, hit.role) };
+  const copy = playbookOf(inc.kind).unwindResolution(order, inc);
+  const now = new Date().toISOString();
+  return {
+    lots: releaseLots(lots, order.allocations),
+    reputations: nextRep,
+    order: {
+      ...order,
+      status: "cancelled",
+      playback: false,
+      invoices: order.invoices.map((inv) =>
+        inv.kind === "remainder" && inv.status !== "paid" ? { ...inv, status: "cancelled" } : inv,
+      ),
+      incidents: order.incidents.map((i) =>
+        i.id === incidentId ? { ...i, status: "resolved", resolution: copy.resolution } : i,
+      ),
+      events: [
+        ...order.events,
+        { id: uid("ev"), at: now, delayMs: 0, stage: "dispute", text: copy.event },
+      ],
+    },
+  };
+}
+
+/** @deprecated use platformUnwind — kept for call sites that name the paid case. */
+export function platformBreakPaid(
+  order: Order,
+  incidentId: string,
+  lots: Lot[],
+  reputations: Record<string, TrustScore>,
+): { order: Order; lots: Lot[]; reputations: Record<string, TrustScore> } {
+  return platformUnwind(order, incidentId, lots, reputations);
+}
+
+export { proposeRemedy };

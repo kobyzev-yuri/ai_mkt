@@ -1,4 +1,5 @@
 import { companyById } from "./agents";
+import { KIND_LIFE, KIND_WHEN, playbookOf, unwindModeOf } from "./incident-playbook";
 import { INCIDENT_LABEL } from "./trust";
 import type { Incident, IncidentKind, Order, OrderStatus } from "./types";
 
@@ -53,7 +54,7 @@ export function incidentRoles(inc: Incident, order: Order) {
     platform: {
       who: "human" as const,
       title: "Atrium · бэкофис",
-      job: "Только после отклонения. Решение по документам заказа. Рейтинг бьём только здесь.",
+      job: "Только после отклонения. Фиксирует обход этого кейса или откат, если плейбук его даёт. Рейтинг — только здесь.",
     },
   };
 }
@@ -63,7 +64,7 @@ const BUYER_BY_STATUS: Partial<Record<OrderStatus, IncidentKind[]>> = {
   reserving: ["stock_miss"],
   picking: ["stock_miss"],
   shipping: ["delay_ship", "stock_miss"],
-  in_transit: ["delay_ship"],
+  in_transit: ["delay_ship", "stock_miss"],
   delivered: ["shortage", "quality", "docs", "delay_ship"],
   acceptance_due: ["shortage", "quality", "docs"],
 };
@@ -79,18 +80,28 @@ const SELLER_BY_STATUS: Partial<Record<OrderStatus, IncidentKind[]>> = {
   remainder_due: ["delay_pay", "force_majeure"],
 };
 
-export const KIND_WHEN: Record<IncidentKind, string> = {
-  delay_ship: "Пока партия в пути или срок вышел — не после закрытия контура.",
-  delay_pay: "Пока ждут аванс или остаток.",
-  shortage: "На приёмке, пока акт не подписан «как есть».",
-  quality: "На приёмке, если паспорт не бьётся с грузом.",
-  docs: "На приёмке, если нет УПД, ТТН или паспорта.",
-  stock_miss: "До отгрузки, если склад не подтвердил лот.",
-  force_majeure: "Пока заказ живой и есть документ о причине.",
-};
+export { KIND_LIFE, KIND_WHEN, playbookOf };
 
 export function contourClosed(order: Order): boolean {
   return order.status === "settled" || order.status === "cancelled";
+}
+
+export function advancePaid(order: Order): boolean {
+  return order.invoices.some((i) => i.kind === "advance" && i.status === "paid");
+}
+
+/** Money already left the buyer — unpaid rollback is closed. */
+export function canUnwindPaid(order: Order): boolean {
+  return advancePaid(order) && !contourClosed(order);
+}
+
+export function canUnwindIncident(order: Order, incident: Incident): boolean {
+  return !contourClosed(order) && unwindModeOf(order, incident.kind) !== "none";
+}
+
+export function unwindButtonLabel(order: Order, incident: Incident): string | null {
+  if (!canUnwindIncident(order, incident)) return null;
+  return playbookOf(incident.kind).unwindLabel(order);
 }
 
 export function allowedKinds(order: Order, side: "buyer" | "seller"): IncidentKind[] {

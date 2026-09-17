@@ -5,13 +5,17 @@ import { Badge } from "@/components/ui";
 import {
   INCIDENT_LABEL,
   INCIDENT_STATUS_LABEL,
+  KIND_LIFE,
   KIND_WHEN,
   canAcceptRemedy,
   canEscalate,
+  canUnwindIncident,
   contourClosed,
   incidentRoles,
   openIncidents,
+  playbookOf,
   reportableKinds,
+  unwindButtonLabel,
 } from "@/lib/incident-desk";
 import type { Incident, IncidentKind, Order } from "@/lib/types";
 
@@ -23,6 +27,7 @@ export function IncidentRoom({
   onAccept,
   onEscalate,
   onPlatform,
+  onBreakPaid,
 }: {
   order: Order;
   companyId: string;
@@ -31,6 +36,7 @@ export function IncidentRoom({
   onAccept: (id: string) => void;
   onEscalate: (id: string) => void;
   onPlatform: (id: string) => void;
+  onBreakPaid?: (id: string) => void;
 }) {
   const side = companyId === order.buyerId ? "buyer" : companyId === order.sellerId ? "seller" : null;
   const closed = contourClosed(order);
@@ -43,9 +49,9 @@ export function IncidentRoom({
       <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { n: "01", who: "человек", t: "Факт", d: "Заявитель фиксирует, что сломалось. Не набор клавиш на закрытом заказе." },
-          { n: "02", who: "агент", t: "Обход", d: "Агент ответственной стороны предлагает компенсацию в мандате." },
+          { n: "02", who: "агент", t: "Обход", d: "Агент сразу предлагает обход этого кейса и, если есть, вариант отката." },
           { n: "03", who: "человек", t: "Акцепт", d: "Человек заявителя принимает обход или отклоняет его на площадку." },
-          { n: "04", who: "площадка", t: "Арбитр", d: "Только после отклонения. Рейтинг бьём только здесь." },
+          { n: "04", who: "площадка", t: "Арбитр", d: "После отклонения: зафиксировать обход кейса или откат из плейбука." },
         ].map((s) => (
           <li key={s.n} className="border border-line bg-surface px-4 py-4">
             <p className={`font-mono text-[10px] uppercase tracking-widest ${s.who === "агент" ? "text-brass" : "text-terra"}`}>
@@ -75,6 +81,7 @@ export function IncidentRoom({
               onAccept={() => onAccept(inc.id)}
               onEscalate={() => onEscalate(inc.id)}
               onPlatform={() => onPlatform(inc.id)}
+              onBreakPaid={onBreakPaid ? () => onBreakPaid(inc.id) : undefined}
             />
           ))}
           {archive.map((inc) => (
@@ -87,6 +94,7 @@ export function IncidentRoom({
               onAccept={() => onAccept(inc.id)}
               onEscalate={() => onEscalate(inc.id)}
               onPlatform={() => onPlatform(inc.id)}
+              onBreakPaid={onBreakPaid ? () => onBreakPaid(inc.id) : undefined}
             />
           ))}
         </section>
@@ -99,10 +107,21 @@ export function IncidentRoom({
             Только то, что возможно на текущем шаге контура. Обход предложит агент другой стороны — не вы и не этот список.
           </p>
           <ul className="mt-5 grid gap-3 sm:grid-cols-2">
-            {kinds.map((kind) => (
+            {kinds.map((kind) => {
+              const book = playbookOf(kind);
+              const proposed = book.workaround(order);
+              const unwind = book.unwindHint(order);
+              return (
               <li key={kind} className="border border-line bg-surface p-4">
                 <p className="font-display text-xl">{INCIDENT_LABEL[kind]}</p>
-                <p className="mt-2 text-[13px] leading-relaxed text-muted">{KIND_WHEN[kind]}</p>
+                <p className="mt-2 text-[13px] leading-relaxed text-muted">{KIND_LIFE[kind]}</p>
+                <p className="mt-2 text-[12px] leading-relaxed text-brass-2">Обход агента: {proposed.text}</p>
+                {unwind ? (
+                  <p className="mt-1 text-[12px] leading-relaxed text-terra">Если отклонить: {unwind}</p>
+                ) : (
+                  <p className="mt-1 text-[12px] leading-relaxed text-muted">Отката нет — только обход, заказ остаётся живым.</p>
+                )}
+                <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-muted">{KIND_WHEN[kind]}</p>
                 <button
                   type="button"
                   onClick={() => onReport(kind)}
@@ -111,7 +130,8 @@ export function IncidentRoom({
                   Зафиксировать
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </section>
       ) : null}
@@ -144,6 +164,7 @@ function IncidentThread({
   onAccept,
   onEscalate,
   onPlatform,
+  onBreakPaid,
 }: {
   order: Order;
   incident: Incident;
@@ -152,11 +173,14 @@ function IncidentThread({
   onAccept: () => void;
   onEscalate: () => void;
   onPlatform: () => void;
+  onBreakPaid?: () => void;
 }) {
   const roles = incidentRoles(incident, order);
   const done = incident.status === "resolved";
   const accept = canAcceptRemedy(order, incident, companyId);
   const escalate = canEscalate(order, incident, companyId);
+  const unwind = Boolean(office && incident.status === "escalated" && canUnwindIncident(order, incident) && onBreakPaid);
+  const unwindLabel = unwind ? unwindButtonLabel(order, incident) : null;
 
   return (
     <article className="border border-terra/40 bg-surface p-5">
@@ -177,6 +201,11 @@ function IncidentThread({
           <p className="font-mono text-[10px] uppercase tracking-widest text-brass">02 · {roles.proposer.title}</p>
           <p className="mt-1 text-[15px] leading-relaxed text-paper">{incident.proposed.text}</p>
           <p className="mt-1 text-[13px] text-muted">{roles.proposer.job}</p>
+          {playbookOf(incident.kind).unwindHint(order) ? (
+            <p className="mt-2 text-[13px] text-terra">{playbookOf(incident.kind).unwindHint(order)}</p>
+          ) : (
+            <p className="mt-2 text-[13px] text-muted">В этом кейсе отката нет: отклонение всё равно ведёт к фиксации обхода.</p>
+          )}
         </li>
         <li className="border-l-2 border-terra pl-4">
           <p className="font-mono text-[10px] uppercase tracking-widest text-terra">03 · {roles.decider.title}</p>
@@ -219,13 +248,24 @@ function IncidentThread({
           <p className="mt-1 text-[13px] text-muted">{roles.platform.job}</p>
           {incident.resolution ? <p className="mt-2 text-[14px] text-moss">{incident.resolution}</p> : null}
           {office && incident.status === "escalated" ? (
-            <button
-              type="button"
-              onClick={onPlatform}
-              className="mt-3 rounded-full border border-terra/50 px-4 py-2 text-[13px] text-terra"
-            >
-              Решение Atrium (рейтинг)
-            </button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onPlatform}
+                className="rounded-full border border-terra/50 px-4 py-2 text-[13px] text-terra"
+              >
+                Зафиксировать обход
+              </button>
+              {unwind ? (
+                <button
+                  type="button"
+                  onClick={onBreakPaid}
+                  className="rounded-full border border-line px-4 py-2 text-[13px] text-paper"
+                >
+                  {unwindLabel ?? "Откат"}
+                </button>
+              ) : null}
+            </div>
           ) : null}
           {incident.status === "escalated" && !office ? (
             <p className="mt-2 text-[13px] text-terra">Ждёт арбитра площадки. Стороны больше не торгуют обход.</p>

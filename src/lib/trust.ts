@@ -1,3 +1,4 @@
+import { proposeRemedy as playbookRemedy } from "./incident-playbook";
 import type { IncidentKind, Remedy, TrustScore } from "./types";
 
 const base = (over: Partial<TrustScore> = {}): TrustScore => ({
@@ -28,55 +29,7 @@ export function trustOf(id: string, overlay?: Record<string, TrustScore>): Trust
 }
 
 export function proposeRemedy(kind: IncidentKind, delayDays = 2, orderTotal = 0): Remedy {
-  switch (kind) {
-    case "delay_ship": {
-      const pct = Math.min(5, Math.max(0.5, delayDays * 0.5));
-      const amount = Math.round((orderTotal * pct) / 100);
-      return {
-        kind: "price_cut",
-        amount,
-        extraDays: delayDays,
-        text: `Компенсация ${pct}% за срыв отгрузки: ${amount} ₽ зачётом в счёт остатка. Срок +${delayDays} дн.`,
-      };
-    }
-    case "delay_pay": {
-      const amount = Math.round((orderTotal * 0.1 * delayDays) / 100);
-      return {
-        kind: "penalty_hold",
-        amount,
-        extraDays: delayDays,
-        text: `Пеня ${delayDays}×0,1% (${amount} ₽). Следующие партии — предоплата +10 п.п., резерв не снимается.`,
-      };
-    }
-    case "shortage":
-      return {
-        kind: "credit_note",
-        text: "Зачёт на недостачу + довоз из соседней партии. Акт расхождения при приёмке.",
-      };
-    case "quality":
-      return {
-        kind: "replace_lot",
-        text: "Замена партии или −8% к цене при приёмке с актом. Третьи лица (лаборатория) — за счёт виновной стороны.",
-      };
-    case "docs":
-      return {
-        kind: "reissue_docs",
-        extraDays: 1,
-        text: "Перевыпуск накладной и УПД за 1 день. Без закрывающих сделка не закрывается — это не мелочь.",
-      };
-    case "stock_miss":
-      return {
-        kind: "split_ship",
-        extraDays: 7,
-        text: "Лот не подтвердился. Дробим: что есть — сейчас, остаток со слота производства. Либо отмена с ударом по рейтингу склада.",
-      };
-    default:
-      return {
-        kind: "extend_sla",
-        extraDays: 5,
-        text: "Форс-мажор: сдвигаем срок поставки, рейтинг не трогаем, если есть справка. Иначе — как срыв срока.",
-      };
-  }
+  return playbookRemedy(kind, delayDays, orderTotal);
 }
 
 export function applyTrustHit(
@@ -97,6 +50,10 @@ export function applyTrustHit(
   }
   if (kind === "docs" && role === "seller") {
     next.abnormalFulfillPct = Math.min(40, next.abnormalFulfillPct + 0.8);
+  }
+  if (kind === "stock_miss" && role === "seller") {
+    next.abnormalFulfillPct = Math.min(40, next.abnormalFulfillPct + 3);
+    next.claimRatePct = Math.min(25, next.claimRatePct + 0.8);
   }
   next.score = Math.round(
     next.onTimeShipPct * 0.28 +

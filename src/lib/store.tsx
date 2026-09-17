@@ -13,7 +13,8 @@ import { withTactic } from "./bargain";
 import { applyAcceptance, applyAdvancePayment, applyRemainderPayment, createOrderFromDeal } from "./fulfillment";
 import { uid } from "./ids";
 import { consumeLots, releaseLots } from "./inventory";
-import { acceptRemedy, escalateIncident, openIncident, platformResolve } from "./ops";
+import { openIncidents, reportableKinds } from "./incident-desk";
+import { acceptRemedy, escalateIncident, openIncident, platformResolve, platformUnwind } from "./ops";
 import { BUYER_ID, SELLER_ID, companies, DEMO_PROMPTS, lots as seedLots, seedDeals, seedOrders, seedRfqs } from "./seed";
 import { DEFAULT_MODEL } from "./ollama";
 import { applyPolicy, bestAutoPass, policyOf } from "./policy";
@@ -193,6 +194,7 @@ type Store = MarketplaceState & {
   acceptIncidentRemedy: (orderId: string, incidentId: string) => void;
   escalateOrderIncident: (orderId: string, incidentId: string) => void;
   resolveOnPlatform: (orderId: string, incidentId: string) => void;
+  breakPaidOrder: (orderId: string, incidentId: string) => void;
   importAdaptedLots: (incoming: Lot[]) => void;
   returnLotsToShowcase: (orderId: string) => void;
   resetDemo: () => void;
@@ -355,6 +357,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!order || (order.status !== "in_transit" && order.status !== "delivered" && order.status !== "acceptance_due")) {
       return;
     }
+    if (openIncidents(order).some((i) => i.kind === "shortage" || i.kind === "quality" || i.kind === "docs")) return;
     patchOrder(orderId, applyAcceptance({ ...order, playback: false, status: "acceptance_due" }), [
       {
         actor: "human",
@@ -369,6 +372,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const payRemainder = useCallback((orderId: string) => {
     const order = memory.orders.find((o) => o.id === orderId);
     if (!order || order.status !== "remainder_due") return;
+    if (openIncidents(order).some((i) => i.kind === "delay_pay")) return;
     persist(
       withAudit(
         {
@@ -390,6 +394,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         : memory.currentCompanyId === order.sellerId
           ? "seller"
           : "system";
+    if (raisedBy !== "system" && !reportableKinds(order, raisedBy).includes(kind)) return undefined;
     const next = openIncident(order, kind, raisedBy);
     const created = next.incidents.find((i) => i.kind === kind && i.status !== "resolved") ?? next.incidents.at(-1);
     patchOrder(orderId, next, [
@@ -436,6 +441,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             action: "Решение Atrium",
             detail: "Обход зафиксирован, рейтинг обновлён по документам в заказе",
             constraint: "Удар по баллу только после арбитража",
+            ref: orderId,
+          },
+        ],
+      ),
+    );
+  }, []);
+
+  const breakPaidOrder = useCallback((orderId: string, incidentId: string) => {
+    const order = memory.orders.find((o) => o.id === orderId);
+    if (!order) return;
+    const next = platformUnwind(order, incidentId, memory.lots, memory.reputations);
+    persist(
+      withAudit(
+        {
+          ...memory,
+          orders: memory.orders.map((o) => (o.id === orderId ? next.order : o)),
+          deals: memory.deals.map((d) => (d.id === order.dealId ? { ...d, status: "rejected" as const } : d)),
+          lots: next.lots,
+          reputations: next.reputations,
+        },
+        [
+          {
+            actor: "platform",
+            action: "Откат контура",
+            detail: "Плейбук кейса: резерв снят, деньги по статусу аванса, рейтинг по документам",
+            constraint: "Откат только если плейбук кейса его даёт",
             ref: orderId,
           },
         ],
@@ -547,6 +578,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     acceptIncidentRemedy,
     escalateOrderIncident,
     resolveOnPlatform,
+    breakPaidOrder,
     importAdaptedLots,
     returnLotsToShowcase,
     setPolicy,

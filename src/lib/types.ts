@@ -51,7 +51,7 @@ export type OrderStatus =
   | "settled"
   | "cancelled";
 export type InvoiceKind = "advance" | "remainder";
-export type InvoiceStatus = "draft" | "issued" | "paid";
+export type InvoiceStatus = "draft" | "issued" | "paid" | "cancelled";
 export type DocumentKind = "invoice" | "spec" | "upd" | "ttn" | "cert" | "acceptance";
 
 export interface Product {

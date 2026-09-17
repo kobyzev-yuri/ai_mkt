@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pipeline } from "@/components/pipeline";
 import { AgentMark, Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
-import { compactRub, days, dealStatusLabel, deliveryLine, qty, rub } from "@/lib/format";
+import { compactRub, days, dealStatusLabel, deliveryLine, qty, rating, rub } from "@/lib/format";
+import { incidentRoles } from "@/lib/incident-desk";
 import { freeQty, lotsForProduct } from "@/lib/inventory";
 import {
   DEMO_1C_CSV,
@@ -16,10 +17,11 @@ import { parseNeed } from "@/lib/parse-need";
 import { DEMO_QUERY, type AgentRoleId } from "@/lib/scenarios";
 import { SELLER_ID } from "@/lib/seed";
 import { useStore } from "@/lib/store";
-import type { Deal, Lot, Order } from "@/lib/types";
+import { trustOf } from "@/lib/trust";
+import type { Deal, Incident, Lot, Order } from "@/lib/types";
 
 type Actor = "agent" | "human" | "both";
-type ProcessId = "vitrine" | "deal" | "fail";
+type ProcessId = "vitrine" | "deal" | "incident" | "paidfail" | "fail";
 
 interface Slide {
   id: string;
@@ -34,7 +36,9 @@ interface Slide {
 const PROCESSES: { id: ProcessId; n: string; title: string }[] = [
   { id: "vitrine", n: "I", title: "Загрузка витрины" },
   { id: "deal", n: "II", title: "Поиск — торговля — сделка — остатки" },
-  { id: "fail", n: "III", title: "Провал сделки — откат" },
+  { id: "incident", n: "III", title: "Инцидент — обход" },
+  { id: "paidfail", n: "IV", title: "Срыв после аванса" },
+  { id: "fail", n: "V", title: "Провал до аванса — откат" },
 ];
 
 const SLIDES: Slide[] = [
@@ -129,21 +133,93 @@ const SLIDES: Slide[] = [
     roles: ["human", "fulfillment"],
   },
   {
+    id: "inc-fact",
+    process: "incident",
+    n: "11",
+    title: "Факт",
+    who: "human",
+    note: "Закупщик фиксирует срыв отгрузки. Контур живой: партия в пути. Это не клавиша на закрытом заказе.",
+    roles: ["human"],
+  },
+  {
+    id: "inc-propose",
+    process: "incident",
+    n: "12",
+    title: "Обход",
+    who: "agent",
+    note: "Агент поставщика сразу предлагает зачёт в остаток. Рейтинг здесь не бьём — стороны ещё не у площадки.",
+    roles: ["seller-agent", "ops"],
+  },
+  {
+    id: "inc-accept",
+    process: "incident",
+    n: "13",
+    title: "Акцепт",
+    who: "human",
+    note: "Человек заявителя принимает обход. Заказ идёт дальше. Площадка не входила.",
+    roles: ["human"],
+  },
+  {
+    id: "paid-money",
+    process: "paidfail",
+    n: "14",
+    title: "Аванс уже ушёл",
+    who: "human",
+    note: "Казначейство заплатило. Простой откат закрыт: снять резерв как до оплаты уже нельзя.",
+    roles: ["human"],
+  },
+  {
+    id: "paid-fact",
+    process: "paidfail",
+    n: "15",
+    title: "Лот-призрак",
+    who: "human",
+    note: "Склад не подтвердил партию уже после денег. Это сложнее срыва до оплаты: контур живой, деньги внутри.",
+    roles: ["human"],
+  },
+  {
+    id: "paid-propose",
+    process: "paidfail",
+    n: "16",
+    title: "Обход мало",
+    who: "agent",
+    note: "Агент поставщика дробит отгрузку. Для закупки этого недостаточно — рейтинг пока не бьём.",
+    roles: ["seller-agent", "ops"],
+  },
+  {
+    id: "paid-reject",
+    process: "paidfail",
+    n: "17",
+    title: "На площадку",
+    who: "human",
+    note: "Человек заявителя отклоняет обход. Стороны больше не торгуют. Входит бэкофис.",
+    roles: ["human"],
+  },
+  {
+    id: "paid-break",
+    process: "paidfail",
+    n: "18",
+    title: "Расторжение",
+    who: "human",
+    note: "Площадка: аванс к возврату, резерв снят, заказ отменён, рейтинг склада. Не откат до оплаты.",
+    roles: ["platform"],
+  },
+  {
     id: "fail",
     process: "fail",
-    n: "11",
+    n: "19",
     title: "Срыв до аванса",
     who: "human",
-    note: "Сделка утверждена, казначейство не платит. Заказ ждёт аванс — резерв висит.",
+    note: "Сделка утверждена, казначейство не платит. Заказ ждёт аванс — резерв висит. Денег в контуре нет.",
     roles: ["human"],
   },
   {
     id: "rollback",
     process: "fail",
-    n: "12",
+    n: "20",
     title: "Откат",
     who: "agent",
-    note: "Резерв снят, партии снова в поиске. Списывать нечего: оплаты не было.",
+    note: "Резерв снят, партии снова в поиске. Списывать нечего: оплаты не было. Рейтинг не трогаем.",
     roles: ["ops", "fulfillment"],
   },
 ];
@@ -212,9 +288,14 @@ export default function DemoPage() {
     payRemainder,
     importAdaptedLots,
     returnLotsToShowcase,
+    reportIncident,
+    acceptIncidentRemedy,
+    escalateOrderIncident,
+    breakPaidOrder,
     deals,
     orders,
     lots,
+    reputations,
     resetDemo,
   } = useStore();
 
@@ -225,16 +306,24 @@ export default function DemoPage() {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [failRfqId, setFailRfqId] = useState<string | null>(null);
   const [failOrderId, setFailOrderId] = useState<string | null>(null);
+  const [incOrderId, setIncOrderId] = useState<string | null>(null);
+  const [incId, setIncId] = useState<string | null>(null);
+  const [paidOrderId, setPaidOrderId] = useState<string | null>(null);
+  const [paidIncId, setPaidIncId] = useState<string | null>(null);
 
   const slides = slidesOf(processId);
   const slide = slides[step] ?? slides[0];
   const deal = deals.find((d) => d.id === dealId);
   const order = orders.find((o) => o.id === orderId);
   const failOrder = orders.find((o) => o.id === failOrderId);
+  const incOrder = orders.find((o) => o.id === incOrderId);
+  const inc = incOrder?.incidents?.find((i) => i.id === incId) ?? incOrder?.incidents?.at(-1);
+  const paidOrder = orders.find((o) => o.id === paidOrderId);
+  const paidInc = paidOrder?.incidents?.find((i) => i.id === paidIncId) ?? paidOrder?.incidents?.at(-1);
   const rooms = rfqId ? deals.filter((d) => d.rfqId === rfqId) : [];
   const failRooms = failRfqId ? deals.filter((d) => d.rfqId === failRfqId) : [];
   const last = step === slides.length - 1;
-  const productId = deal?.productId ?? failOrder?.productId ?? KRAFT;
+  const productId = deal?.productId ?? incOrder?.productId ?? paidOrder?.productId ?? failOrder?.productId ?? KRAFT;
   const process = PROCESSES.find((p) => p.id === processId)!;
 
   const applyLeave = useCallback(
@@ -257,6 +346,28 @@ export default function DemoPage() {
     }
   }, [approveDeal, prepareShowcase]);
 
+  const startIncident = useCallback(() => {
+    const created = prepareShowcase(DEMO_QUERY);
+    const best = pickDeal(created.deals);
+    if (!best) return;
+    const oid = approveDeal(best.id);
+    if (!oid) return;
+    payAdvance(oid);
+    setIncOrderId(oid);
+    setIncId(null);
+  }, [approveDeal, payAdvance, prepareShowcase]);
+
+  const startPaidFail = useCallback(() => {
+    const created = prepareShowcase(DEMO_QUERY);
+    const best = pickDeal(created.deals);
+    if (!best) return;
+    const oid = approveDeal(best.id);
+    if (!oid) return;
+    payAdvance(oid);
+    setPaidOrderId(oid);
+    setPaidIncId(null);
+  }, [approveDeal, payAdvance, prepareShowcase]);
+
   const applyEnter = useCallback(
     (id: string) => {
       if (id === "publish") {
@@ -272,6 +383,45 @@ export default function DemoPage() {
         acceptDelivery(orderId);
         payRemainder(orderId);
       }
+      if (id === "inc-fact") {
+        startIncident();
+      }
+      if (id === "inc-propose" && incOrderId) {
+        const created = reportIncident(incOrderId, "delay_ship");
+        if (created) setIncId(created);
+      }
+      if (id === "inc-accept" && incOrderId) {
+        const live = orders.find((o) => o.id === incOrderId);
+        const open = live?.incidents?.find((i) => i.status === "negotiating") ?? (incId ? live?.incidents?.find((i) => i.id === incId) : undefined);
+        if (open) acceptIncidentRemedy(incOrderId, open.id);
+      }
+      if (id === "paid-money") {
+        const existing = paidOrderId ? orders.find((o) => o.id === paidOrderId) : undefined;
+        if (existing && existing.status !== "cancelled" && existing.status !== "advance_due") return;
+        startPaidFail();
+      }
+      if (id === "paid-fact" && paidOrderId) {
+        const live = orders.find((o) => o.id === paidOrderId);
+        if (live?.incidents?.some((i) => i.status !== "resolved")) return;
+        const created = reportIncident(paidOrderId, "stock_miss");
+        if (created) setPaidIncId(created);
+      }
+      if (id === "paid-reject" && paidOrderId) {
+        const live = orders.find((o) => o.id === paidOrderId);
+        const open =
+          live?.incidents?.find((i) => i.status === "negotiating") ??
+          (paidIncId ? live?.incidents?.find((i) => i.id === paidIncId) : undefined);
+        if (open) escalateOrderIncident(paidOrderId, open.id);
+      }
+      if (id === "paid-break" && paidOrderId) {
+        const live = orders.find((o) => o.id === paidOrderId);
+        if (!live || live.status === "cancelled") return;
+        const open =
+          live.incidents?.find((i) => i.status === "escalated") ??
+          live.incidents?.find((i) => i.id === paidIncId) ??
+          live.incidents?.at(-1);
+        if (open) breakPaidOrder(paidOrderId, open.id);
+      }
       if (id === "fail") {
         const existing = failOrderId ? orders.find((o) => o.id === failOrderId) : undefined;
         if (existing?.status === "advance_due") return;
@@ -283,16 +433,26 @@ export default function DemoPage() {
     },
     [
       acceptDelivery,
+      acceptIncidentRemedy,
+      breakPaidOrder,
+      escalateOrderIncident,
       failOrderId,
       importAdaptedLots,
+      incId,
+      incOrderId,
       orderId,
       orders,
+      paidIncId,
+      paidOrderId,
       payAdvance,
       payRemainder,
       prepareShowcase,
+      reportIncident,
       returnLotsToShowcase,
       rfqId,
       startFail,
+      startIncident,
+      startPaidFail,
     ],
   );
 
@@ -317,6 +477,16 @@ export default function DemoPage() {
         setDealId(null);
         setOrderId(null);
       }
+      if (id === "incident") {
+        setIncOrderId(null);
+        setIncId(null);
+      }
+      if (id === "paidfail") {
+        setPaidOrderId(null);
+        setPaidIncId(null);
+        startPaidFail();
+        return;
+      }
       if (id === "fail") {
         setFailRfqId(null);
         setFailOrderId(null);
@@ -325,7 +495,7 @@ export default function DemoPage() {
       }
       applyEnter(slidesOf(id)[0].id);
     },
-    [applyEnter, startFail],
+    [applyEnter, startFail, startPaidFail],
   );
 
   function restart() {
@@ -335,8 +505,14 @@ export default function DemoPage() {
     setOrderId(null);
     setFailRfqId(null);
     setFailOrderId(null);
+    setIncOrderId(null);
+    setIncId(null);
+    setPaidOrderId(null);
+    setPaidIncId(null);
     setStep(0);
     if (processId === "fail") startFail();
+    if (processId === "incident") startIncident();
+    if (processId === "paidfail") startPaidFail();
   }
 
   useEffect(() => {
@@ -362,11 +538,11 @@ export default function DemoPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-10">
-      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Демо · три процесса · слайды</p>
-      <h1 className="mt-2 font-display text-5xl leading-tight">Витрина, сделка, откат</h1>
+      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Демо · пять процессов · слайды</p>
+      <h1 className="mt-2 font-display text-5xl leading-tight">Витрина, сделка, обход, срыв, откат</h1>
       <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-muted">
-        Выберите процесс — «Далее» листает только его шаги. Латунь на кадре — агент, терракота — человек. Движок без
-        Ollama.
+        Выберите процесс — «Далее» листает только его шаги. Латунь на кадре — агент, терракота — человек. Процесс IV —
+        сложный случай: деньги уже ушли, простой откат закрыт. Движок без Ollama.
       </p>
       <div className="mt-5 flex flex-wrap gap-2">
         {PROCESSES.map((proc) => {
@@ -462,6 +638,61 @@ export default function DemoPage() {
                 caption="После оплаты остатка: qty уменьшен, резерв снят. Партия списана с витрины."
               />
             )}
+            {slide.id === "inc-fact" && (
+              <IncidentSlide
+                order={incOrder}
+                phase="fact"
+                incident={inc}
+              />
+            )}
+            {slide.id === "inc-propose" && (
+              <IncidentSlide
+                order={incOrder}
+                phase="propose"
+                incident={inc}
+              />
+            )}
+            {slide.id === "inc-accept" && (
+              <IncidentSlide
+                order={incOrder}
+                phase="accept"
+                incident={inc}
+              />
+            )}
+            {slide.id === "paid-money" && (
+              <StockBlock
+                lots={lots}
+                productId={paidOrder?.productId ?? productId}
+                order={paidOrder}
+                caption="Аванс проведён. Партия в пути, резерв держится. Снять его как до оплаты уже нельзя."
+              />
+            )}
+            {slide.id === "paid-fact" && (
+              <IncidentSlide order={paidOrder} incident={paidInc} phase="fact" story="paid" />
+            )}
+            {slide.id === "paid-propose" && (
+              <IncidentSlide order={paidOrder} incident={paidInc} phase="propose" story="paid" />
+            )}
+            {slide.id === "paid-reject" && (
+              <IncidentSlide order={paidOrder} incident={paidInc} phase="reject" story="paid" />
+            )}
+            {slide.id === "paid-break" && (
+              <div className="space-y-8">
+                <IncidentSlide
+                  order={paidOrder}
+                  incident={paidInc}
+                  phase="break"
+                  story="paid"
+                  score={paidOrder ? trustOf(paidOrder.sellerId, reputations).score : undefined}
+                />
+                <StockBlock
+                  lots={lots}
+                  productId={paidOrder?.productId ?? productId}
+                  order={paidOrder}
+                  caption="После решения площадки: заказ отменён, reserved снят, qty тот же. Аванс — к возврату, это не «как будто не платили»."
+                />
+              </div>
+            )}
             {slide.id === "fail" && (
               <StockBlock
                 lots={lots}
@@ -506,6 +737,101 @@ export default function DemoPage() {
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+function IncidentSlide({
+  order,
+  incident,
+  phase,
+  story = "accept",
+  score,
+}: {
+  order?: Order;
+  incident?: Incident;
+  phase: "fact" | "propose" | "accept" | "reject" | "break";
+  story?: "accept" | "paid";
+  score?: number;
+}) {
+  const roles = order && incident ? incidentRoles(incident, order) : null;
+  const buyer = order ? companyById(order.buyerId) : null;
+  const seller = order ? companyById(order.sellerId) : null;
+  const product = order ? productById(order.productId) : null;
+  const paid = story === "paid";
+
+  return (
+    <div>
+      {order && product ? (
+        <p className="mb-4 text-[14px] text-muted">
+          {product.name} · {buyer?.short} ↔ {seller?.short} · {compactRub(order.total)}
+          {score != null ? ` · рейтинг поставщика ${rating(score)}` : ""}
+        </p>
+      ) : (
+        <p className="mb-4 text-[14px] text-muted">
+          {paid ? "Сделка утверждена, аванс проведён. Простой откат уже закрыт." : "Сделка утверждена, аванс проведён, партия в пути."}
+        </p>
+      )}
+      <ol className="space-y-3">
+        <li className={`border-l-2 pl-4 ${phase === "fact" ? "border-terra" : "border-line"}`}>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-terra">
+            01 · {roles?.reporter.title ?? "Закупщик · человек"}
+          </p>
+          <p className="mt-1 text-[15px] leading-relaxed text-paper">
+            {incident?.fact ??
+              (paid
+                ? "Фиксирует: лот не подтвердился уже после оплаты. Деньги в контуре, склад пустой."
+                : "Фиксирует срыв отгрузки: срок вышел, партия ещё в пути.")}
+          </p>
+        </li>
+        <li className={`border-l-2 pl-4 ${phase === "propose" ? "border-brass" : "border-line"}`}>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-brass">
+            02 · {roles?.proposer.title ?? "Агент поставщика"}
+          </p>
+          <p className="mt-1 text-[15px] leading-relaxed text-paper">
+            {incident?.proposed.text ??
+              (paid
+                ? "Дробит отгрузку: что есть — сейчас, остаток со слота. Либо отмена с ударом по рейтингу."
+                : "Предложит зачёт в остаток. Рейтинг пока не трогаем.")}
+          </p>
+        </li>
+        <li
+          className={`border-l-2 pl-4 ${
+            phase === "accept" || phase === "reject" ? "border-terra" : "border-line"
+          }`}
+        >
+          <p className="font-mono text-[10px] uppercase tracking-widest text-terra">
+            03 · {roles?.decider.title ?? "Закупщик · человек"}
+          </p>
+          <p className="mt-1 text-[15px] leading-relaxed text-paper">
+            {paid
+              ? incident?.status === "escalated" || incident?.status === "resolved"
+                ? "Отклоняет обход. Стороны больше не торгуют — это уже площадка."
+                : "Обхода недостаточно. Отклоняет на площадку, не принимает дроблёную отгрузку."
+              : incident?.status === "resolved"
+                ? incident.resolution ?? "Обход принят. Площадка не входила."
+                : "Принимает обход. Если отклонит — это уже площадка, не этот кадр."}
+          </p>
+        </li>
+        {paid ? (
+          <li className={`border-l-2 pl-4 ${phase === "break" ? "border-terra" : "border-line"}`}>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-terra">
+              04 · {roles?.platform.title ?? "Atrium · бэкофис"}
+            </p>
+            <p className="mt-1 text-[15px] leading-relaxed text-paper">
+              {incident?.status === "resolved"
+                ? incident.resolution ??
+                  "Расторжение: аванс к возврату, резерв снят, рейтинг склада. Не откат до оплаты."
+                : "Два исхода после отклонения: зафиксировать обход (заказ живой) или расторгнуть после аванса."}
+            </p>
+          </li>
+        ) : null}
+      </ol>
+      {order ? (
+        <div className="mt-5">
+          <Pipeline status={order.status} compact />
+        </div>
+      ) : null}
     </div>
   );
 }
