@@ -86,7 +86,7 @@ export function deskAlerts(
         urgency: inc.status === "escalated" ? "now" : "now",
         title: inc.status === "escalated" ? "Эскалация на площадку" : "Спор: нужен обход",
         detail: `${product.name} · ${inc.kind}`,
-        href: `/orders/${order.id}`,
+        href: `/orders/${order.id}/incident`,
       });
     }
   }

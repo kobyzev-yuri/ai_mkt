@@ -3,24 +3,35 @@ import { compactRub } from "./format";
 import { trustOf } from "./trust";
 import type { Company, ControlMode, Deal, Order, TradePolicy, TrustScore } from "./types";
 
+export const DEFAULT_CONTROL_MODE: ControlMode = "threshold";
+
+export const DEFAULT_POLICY: TradePolicy = {
+  controlMode: "threshold",
+  autoApproveBelow: 400_000,
+  minTrustToAuto: 85,
+};
+
 export const CONTROL_MODE_LABEL: Record<ControlMode, string> = {
-  manual: "Пошаговый контроль",
-  threshold: "Допуски",
+  threshold: "Критические моменты",
+  manual: "Каждая сделка — подпись",
   auto: "Автопилот в мандате",
 };
 
 export const CONTROL_MODE_HINT: Record<ControlMode, string> = {
-  manual: "Агент торгует в мандате. Каждая согласованная сделка, аванс и приёмка ждут вашу подпись.",
-  threshold: "Малая партия и надёжный контрагент проходят сами. Крупное, спорное и слабое доверие — колокольчик.",
-  auto: "Если доверие контрагента не ниже порога и нет открытого спора, сделка утверждается без вас. Деньги и приёмка остаются за человеком.",
+  threshold:
+    "По умолчанию, как раньше. Агент только торгуется в мандате. Человек входит, когда сумма, доверие или спор этого требуют. Деньги и приёмка всегда ваши.",
+  manual:
+    "Для важной партии или нового контрагента: каждое согласие ждёт вашу подпись. Агент по-прежнему не выходит за мандат.",
+  auto:
+    "Для знакомой истории: если доверие не ниже порога и нет спора, сделка проходит без вас. Деньги и приёмка остаются за человеком.",
 };
 
 export function policyOf(company: Company, overlay?: Record<string, TradePolicy>): TradePolicy {
   return (
     overlay?.[company.id] ?? {
-      controlMode: company.agent.controlMode,
-      autoApproveBelow: company.agent.autoApproveBelow,
-      minTrustToAuto: company.agent.minTrustToAuto,
+      controlMode: company.agent.controlMode ?? DEFAULT_CONTROL_MODE,
+      autoApproveBelow: company.agent.autoApproveBelow ?? DEFAULT_POLICY.autoApproveBelow,
+      minTrustToAuto: company.agent.minTrustToAuto ?? DEFAULT_POLICY.minTrustToAuto,
     }
   );
 }

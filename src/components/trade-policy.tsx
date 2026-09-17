@@ -1,8 +1,8 @@
-import { CONTROL_MODE_HINT, CONTROL_MODE_LABEL } from "@/lib/policy";
+import { CONTROL_MODE_HINT, CONTROL_MODE_LABEL, DEFAULT_CONTROL_MODE } from "@/lib/policy";
 import { compactRub } from "@/lib/format";
 import type { ControlMode, TradePolicy } from "@/lib/types";
 
-const MODES: ControlMode[] = ["manual", "threshold", "auto"];
+const MODES: ControlMode[] = ["threshold", "manual", "auto"];
 
 export function TradePolicyEditor({
   policy,
@@ -27,6 +27,7 @@ export function TradePolicyEditor({
             >
               <p className="font-mono text-[10px] uppercase tracking-widest text-brass">
                 {CONTROL_MODE_LABEL[mode]}
+                {mode === DEFAULT_CONTROL_MODE ? " · по умолчанию" : ""}
               </p>
               <p className="mt-2 text-[12px] leading-relaxed text-muted">{CONTROL_MODE_HINT[mode]}</p>
             </button>

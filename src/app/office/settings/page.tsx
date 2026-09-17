@@ -1,9 +1,10 @@
 "use client";
 
 import { OLLAMA_MODELS } from "@/lib/ollama";
-import { compactRub } from "@/lib/format";
-import { CONTROL_MODE_LABEL, policyOf } from "@/lib/policy";
+import { tacticLabel, withTactic } from "@/lib/bargain";
+import type { BargainTactic } from "@/lib/types";
 import { companies } from "@/lib/seed";
+import { compactRub } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { useEffect, useState } from "react";
 
@@ -20,7 +21,7 @@ const PRIORITY: Record<string, string> = {
 };
 
 export default function OfficeSettingsPage() {
-  const { llmModel, setLlmModel, resetDemo, lastBuyerId, lastSellerId, policies } = useStore();
+  const { llmModel, setLlmModel, resetDemo, lastBuyerId, lastSellerId, tactics } = useStore();
   const [models, setModels] = useState<{ id: string; label: string }[]>(
     OLLAMA_MODELS.map((m) => ({ id: m.id, label: m.label })),
   );
@@ -40,11 +41,11 @@ export default function OfficeSettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-12">
-      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Бэкофис · настройки</p>
+      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-brass">Политика · правила</p>
       <h1 className="mt-2 font-display text-5xl">Политика среды</h1>
       <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-muted">
-        Мандат задаёт пол цены. Политику торговли (пошагово / допуски / автопилот) меняет участник в своём кабинете.
-        Модель пишет только реплики. Сброс возвращает демо-партии, комнаты и политики.
+        Мандат задаёт пол цены и автоутверждение. Модель пишет только реплики. Сброс возвращает демо-партии и комнаты.
+        Операции с контрагентами остаются в кабинетах закупки и поставки.
       </p>
 
       <section className="mt-10 grid gap-4 md:grid-cols-2">
@@ -83,8 +84,8 @@ export default function OfficeSettingsPage() {
         </div>
       </section>
 
-      <MandateGroup title="Закупщики" rows={buyers} policies={policies} />
-      <MandateGroup title="Поставщики" rows={sellers} policies={policies} />
+      <MandateGroup title="Закупщики" rows={buyers} tactics={tactics} />
+      <MandateGroup title="Поставщики" rows={sellers} tactics={tactics} />
     </div>
   );
 }
@@ -92,34 +93,31 @@ export default function OfficeSettingsPage() {
 function MandateGroup({
   title,
   rows,
-  policies,
+  tactics,
 }: {
   title: string;
   rows: typeof companies;
-  policies: ReturnType<typeof useStore>["policies"];
+  tactics: Record<string, BargainTactic>;
 }) {
   return (
     <section className="mt-12">
       <h2 className="font-display text-3xl">{title}</h2>
-      <p className="mt-2 max-w-2xl text-[13px] text-muted">
-        Политику меняет сам участник в кабинете. Здесь видно, как сейчас пускают сделки.
-      </p>
       <div className="mt-5 divide-y divide-line border border-line">
-        {rows.map((c) => {
-          const policy = policyOf(c, policies);
+        {rows.map((raw) => {
+          const c = withTactic(raw, tactics);
           return (
-            <div key={c.id} className="bg-surface px-4 py-4">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-display text-2xl">{c.short}</p>
-                <p className="font-mono text-[11px] text-brass">агент «{c.agent.name}»</p>
-              </div>
-              <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-muted">{c.agent.mandate}</p>
-              <p className="mt-2 font-mono text-[11px] text-muted">
-                {CONTROL_MODE_LABEL[policy.controlMode]} · {TONE[c.agent.tone] ?? c.agent.tone} ·{" "}
-                {PRIORITY[c.agent.priority] ?? c.agent.priority} · допуск {compactRub(policy.autoApproveBelow)} · мин.
-                доверие {policy.minTrustToAuto} · пол маржи {c.agent.minMarginPct}%
-              </p>
+          <div key={c.id} className="bg-surface px-4 py-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="font-display text-2xl">{c.short}</p>
+              <p className="font-mono text-[11px] text-brass">агент «{c.agent.name}»</p>
             </div>
+            <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-muted">{c.agent.mandate}</p>
+            <p className="mt-2 font-mono text-[11px] text-muted">
+              тактика {tacticLabel(c.agent.tactic)} · {TONE[c.agent.tone] ?? c.agent.tone} ·{" "}
+              {PRIORITY[c.agent.priority] ?? c.agent.priority} · автоутверждение до {compactRub(c.agent.autoApproveBelow)}
+              {c.role !== "buyer" ? ` · пол маржи ${c.agent.minMarginPct}%` : ""}
+            </p>
+          </div>
           );
         })}
       </div>

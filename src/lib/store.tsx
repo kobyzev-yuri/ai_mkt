@@ -9,14 +9,17 @@ import {
   type ReactNode,
 } from "react";
 import { createRfq as runRfq } from "./agents";
+import { withTactic } from "./bargain";
 import { applyAcceptance, applyAdvancePayment, applyRemainderPayment, createOrderFromDeal } from "./fulfillment";
 import { uid } from "./ids";
+import { consumeLots, releaseLots } from "./inventory";
 import { acceptRemedy, escalateIncident, openIncident, platformResolve } from "./ops";
 import { BUYER_ID, SELLER_ID, companies, DEMO_PROMPTS, lots as seedLots, seedDeals, seedOrders, seedRfqs } from "./seed";
 import { DEFAULT_MODEL } from "./ollama";
 import { applyPolicy, bestAutoPass, policyOf } from "./policy";
+import { allCompanies } from "./roster";
 import { seedTrust } from "./trust";
-import type { AuditEvent, Company, Deal, IncidentKind, MarketplaceState, Order, Rfq, TradePolicy } from "./types";
+import type { AuditEvent, BargainTactic, Company, Deal, IncidentKind, Lot, MarketplaceState, Order, Rfq, TradePolicy } from "./types";
 
 const KEY = "atrium-marketplace-v5";
 
@@ -32,6 +35,7 @@ const initial: MarketplaceState = {
   lastBuyerId: BUYER_ID,
   lastSellerId: SELLER_ID,
   policies: {},
+  tactics: {},
 };
 
 function hydrate(parsed: Partial<MarketplaceState> & { currentCompanyId: string }): MarketplaceState {
@@ -47,6 +51,7 @@ function hydrate(parsed: Partial<MarketplaceState> & { currentCompanyId: string 
     lastBuyerId: parsed.lastBuyerId ?? BUYER_ID,
     lastSellerId: parsed.lastSellerId ?? SELLER_ID,
     policies: parsed.policies ?? {},
+    tactics: parsed.tactics ?? {},
   };
 }
 
@@ -177,6 +182,8 @@ type Store = MarketplaceState & {
   launchRfq: (query: string) => Promise<{ rfq: Rfq; deals: Deal[]; llm: boolean; model: string }>;
   prepareShowcase: (query?: string) => { rfq: Rfq; deals: Deal[] };
   setLlmModel: (id: string) => void;
+  setTactic: (tactic: BargainTactic) => void;
+  setPolicy: (patch: Partial<TradePolicy>) => void;
   approveDeal: (id: string) => string | undefined;
   rejectDeal: (id: string) => void;
   payAdvance: (orderId: string) => void;
@@ -186,7 +193,8 @@ type Store = MarketplaceState & {
   acceptIncidentRemedy: (orderId: string, incidentId: string) => void;
   escalateOrderIncident: (orderId: string, incidentId: string) => void;
   resolveOnPlatform: (orderId: string, incidentId: string) => void;
-  setPolicy: (patch: Partial<TradePolicy>) => void;
+  importAdaptedLots: (incoming: Lot[]) => void;
+  returnLotsToShowcase: (orderId: string) => void;
   resetDemo: () => void;
 };
 
@@ -196,12 +204,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const company = useMemo(() => {
-    const base = companies.find((c) => c.id === state.currentCompanyId) ?? companies[0];
-    return applyPolicy(base, policyOf(base, state.policies));
-  }, [state.currentCompanyId, state.policies]);
+    const roster = allCompanies();
+    const base = roster.find((c) => c.id === state.currentCompanyId) ?? roster[0] ?? companies[0];
+    return applyPolicy(withTactic(base, state.tactics), policyOf(base, state.policies));
+  }, [state.currentCompanyId, state.policies, state.tactics]);
 
   const setCompany = useCallback((id: string) => {
-    const next = companies.find((c) => c.id === id);
+    const next = allCompanies().find((c) => c.id === id);
     persist({
       ...memory,
       currentCompanyId: id,
@@ -212,6 +221,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const setLlmModel = useCallback((id: string) => {
     persist({ ...memory, llmModel: id });
+  }, []);
+
+  const setTactic = useCallback((tactic: BargainTactic) => {
+    persist({ ...memory, tactics: { ...memory.tactics, [memory.currentCompanyId]: tactic } });
   }, []);
 
   const launchRfq = useCallback(async (query: string) => {
@@ -356,14 +369,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const payRemainder = useCallback((orderId: string) => {
     const order = memory.orders.find((o) => o.id === orderId);
     if (!order || order.status !== "remainder_due") return;
-    patchOrder(orderId, applyRemainderPayment(order), [
-      { actor: "human", action: "Оплата остатка", detail: "Контур закрыт", ref: orderId },
-    ]);
+    persist(
+      withAudit(
+        {
+          ...memory,
+          orders: memory.orders.map((o) => (o.id === orderId ? applyRemainderPayment(order) : o)),
+          lots: consumeLots(memory.lots, order.allocations),
+        },
+        [{ actor: "human", action: "Оплата остатка", detail: "Контур закрыт", ref: orderId }],
+      ),
+    );
   }, []);
 
   const reportIncident = useCallback((orderId: string, kind: IncidentKind) => {
     const order = memory.orders.find((o) => o.id === orderId);
-    if (!order) return undefined;
+    if (!order || order.status === "settled" || order.status === "cancelled") return undefined;
     const raisedBy =
       memory.currentCompanyId === order.buyerId
         ? "buyer"
@@ -436,6 +456,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       lastBuyerId: BUYER_ID,
       lastSellerId: SELLER_ID,
       policies: {},
+      tactics: {},
     });
     try {
       localStorage.removeItem(KEY);
@@ -454,12 +475,67 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     autoAwardIfAllowed();
   }, []);
 
+  const returnLotsToShowcase = useCallback((orderId: string) => {
+    const order = memory.orders.find((o) => o.id === orderId);
+    if (!order || order.status !== "advance_due") return;
+    persist(
+      withAudit(
+        {
+          ...memory,
+          orders: memory.orders.map((o) =>
+            o.id === orderId ? { ...o, status: "cancelled" as const, playback: false } : o,
+          ),
+          deals: memory.deals.map((d) => (d.id === order.dealId ? { ...d, status: "rejected" as const } : d)),
+          lots: releaseLots(memory.lots, order.allocations),
+        },
+        [
+          {
+            actor: "ops",
+            action: "Срыв до оплаты",
+            detail: "Резерв снят, партии снова в поиске",
+            ref: orderId,
+          },
+        ],
+      ),
+    );
+  }, []);
+
+  const importAdaptedLots = useCallback((incoming: Lot[]) => {
+    if (!incoming.length) return;
+    const byId = new Map(memory.lots.map((l) => [l.id, l]));
+    for (const lot of incoming) {
+      const prev = byId.get(lot.id);
+      if (prev && prev.reserved > 0) {
+        byId.set(lot.id, { ...lot, reserved: prev.reserved, qty: Math.max(lot.qty, prev.reserved) });
+      } else {
+        byId.set(lot.id, lot);
+      }
+    }
+    const incomingIds = new Set(incoming.map((l) => l.id));
+    const merged = incoming.map((l) => byId.get(l.id)!);
+    const rest = [...byId.values()].filter((l) => !incomingIds.has(l.id));
+    persist(
+      withAudit(
+        { ...memory, lots: [...merged, ...rest] },
+        [
+          {
+            actor: "seller-agent",
+            action: "Выгрузка склада принята",
+            detail: `${incoming.length} партий с адаптера 1С`,
+            constraint: "Повторная выгрузка не снимает чужие партии и не обнуляет резерв",
+          },
+        ],
+      ),
+    );
+  }, []);
+
   const value: Store = {
     ...state,
     hydrated: true,
     company,
     setCompany,
     setLlmModel,
+    setTactic,
     launchRfq,
     prepareShowcase,
     approveDeal,
@@ -471,6 +547,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     acceptIncidentRemedy,
     escalateOrderIncident,
     resolveOnPlatform,
+    importAdaptedLots,
+    returnLotsToShowcase,
     setPolicy,
     resetDemo,
   };

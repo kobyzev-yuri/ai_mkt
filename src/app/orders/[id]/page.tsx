@@ -5,20 +5,20 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Pipeline } from "@/components/pipeline";
 import { DocumentPack } from "@/components/document-pack";
-import { IncidentsPanel } from "@/components/incidents";
 import { PartnerContextCard } from "@/components/partner-context";
 import { Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
 import { compactRub, days, deliveryLine, num, orderStatusLabel, qty, rub, when } from "@/lib/format";
+import { contourClosed, incidentRoomPath, openIncidents } from "@/lib/incident-desk";
 import { packLabel } from "@/lib/packing";
 import { partnerDossier } from "@/lib/partner-context";
 import { useStore } from "@/lib/store";
 import { trustOf } from "@/lib/trust";
-import type { IncidentKind, Order } from "@/lib/types";
+import type { Order } from "@/lib/types";
 
 export default function OrderPage() {
   const { id } = useParams<{ id: string }>();
-  const { orders, deals, company, reputations, payAdvance, acceptDelivery, payRemainder, reportIncident, acceptIncidentRemedy, escalateOrderIncident, resolveOnPlatform } =
+  const { orders, deals, company, reputations, payAdvance, acceptDelivery, payRemainder, returnLotsToShowcase } =
     useStore();
   const order = orders.find((o) => o.id === id);
   if (!order) {
@@ -39,10 +39,7 @@ export default function OrderPage() {
       onPayAdvance={payAdvance}
       onAccept={acceptDelivery}
       onPayRemainder={payRemainder}
-      onReport={(kind) => reportIncident(order.id, kind)}
-      onAcceptRemedy={(incId) => acceptIncidentRemedy(order.id, incId)}
-      onEscalate={(incId) => escalateOrderIncident(order.id, incId)}
-      onPlatform={(incId) => resolveOnPlatform(order.id, incId)}
+      onReturnLots={returnLotsToShowcase}
       sellerScore={trustOf(order.sellerId, reputations).score}
       buyerScore={trustOf(order.buyerId, reputations).score}
       sellerDossier={partnerDossier(order.buyerId, order.sellerId, deals, orders, reputations)}
@@ -57,10 +54,7 @@ function Room({
   onPayAdvance,
   onAccept,
   onPayRemainder,
-  onReport,
-  onAcceptRemedy,
-  onEscalate,
-  onPlatform,
+  onReturnLots,
   sellerScore,
   buyerScore,
   sellerDossier,
@@ -71,10 +65,7 @@ function Room({
   onPayAdvance: (id: string) => void;
   onAccept: (id: string) => void;
   onPayRemainder: (id: string) => void;
-  onReport: (kind: IncidentKind) => void;
-  onAcceptRemedy: (id: string) => void;
-  onEscalate: (id: string) => void;
-  onPlatform: (id: string) => void;
+  onReturnLots: (id: string) => void;
   sellerScore: number;
   buyerScore: number;
   sellerDossier: ReturnType<typeof partnerDossier>;
@@ -129,13 +120,22 @@ function Room({
         </ol>
         {playing && <p className="mt-6 font-mono text-[11px] text-brass">логистика обновляется…</p>}
 
-        {party && !playing && order.status === "advance_due" && (
+        {companyId === order.buyerId && !playing && order.status === "advance_due" && (
           <button
             type="button"
             onClick={() => onPayAdvance(order.id)}
             className="mt-8 rounded-full bg-brass px-5 py-2.5 text-[13px] font-medium text-bg"
           >
             Агент казначейства оплачивает аванс
+          </button>
+        )}
+        {companyId === order.sellerId && !playing && order.status === "advance_due" && (
+          <button
+            type="button"
+            onClick={() => onReturnLots(order.id)}
+            className="mt-8 ml-3 rounded-full border border-line px-5 py-2.5 text-[13px] text-paper hover:border-brass/50"
+          >
+            Вернуть партии на витрину
           </button>
         )}
         {party && !playing && (order.status === "in_transit" || order.status === "acceptance_due") && (
@@ -158,20 +158,11 @@ function Room({
         )}
         {order.status === "settled" && (
           <p className="mt-8 border border-moss/40 bg-surface px-4 py-3 text-[14px] text-moss">
-            Контур закрыт: партии списаны, аванс и остаток оплачены, УПД и акт в архиве.
+            Контур закрыт: партии списаны, аванс и остаток оплачены, УПД и акт в архиве. Новую претензию здесь не открывают.
           </p>
         )}
 
-        <div className="mt-8">
-          <IncidentsPanel
-            order={order}
-            companyId={companyId}
-            onReport={onReport}
-            onAccept={onAcceptRemedy}
-            onEscalate={onEscalate}
-            onPlatform={onPlatform}
-          />
-        </div>
+        <DisputeDoor order={order} />
       </section>
 
       <aside className="space-y-4">
@@ -227,5 +218,40 @@ function Room({
         </Link>
       </aside>
     </div>
+  );
+}
+
+function DisputeDoor({ order }: { order: Order }) {
+  const live = openIncidents(order);
+  const archived = (order.incidents ?? []).length > 0;
+  const closed = contourClosed(order);
+  if (closed && !archived) return null;
+  const href = incidentRoomPath(order.id);
+  if (live.length > 0) {
+    return (
+      <Link href={href} className="mt-8 block border border-terra/50 bg-surface px-5 py-4 hover:border-terra">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-terra">Комната претензии</p>
+        <p className="mt-2 font-display text-2xl">Обход ещё не закрыт</p>
+        <p className="mt-2 text-[14px] leading-relaxed text-muted">
+          Агент предложил компенсацию. Принять или отклонить — в комнате претензии, не клавишами на этом заказе.
+        </p>
+      </Link>
+    );
+  }
+  if (closed) {
+    return (
+      <Link href={href} className="mt-8 block border border-line px-5 py-4 text-[14px] text-muted hover:border-brass/40">
+        Архив претензии →
+      </Link>
+    );
+  }
+  return (
+    <Link href={href} className="mt-8 block border border-line px-5 py-4 hover:border-terra/40">
+      <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Если что-то сломалось</p>
+      <p className="mt-2 font-display text-2xl">Комната претензии</p>
+      <p className="mt-2 text-[14px] leading-relaxed text-muted">
+        Факт фиксирует человек. Обход предлагает агент другой стороны. Акцепт — снова человек. Не набор клавиш внизу заказа.
+      </p>
+    </Link>
   );
 }

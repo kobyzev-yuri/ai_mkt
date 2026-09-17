@@ -4,7 +4,8 @@ import { allocateLots, freeQty, lotsForProduct } from "./inventory";
 import { packCount, packLabel, packingOf, snapToPack } from "./packing";
 import { parseNeed } from "./parse-need";
 import { trustOf } from "./trust";
-import { companies, lots as seedLots, products } from "./seed";
+import { allCompanies } from "./roster";
+import { lots as seedLots, products } from "./seed";
 import type { Company, Deal, Message, Need, Offer, Product, Rfq, TrustScore } from "./types";
 
 export { parseNeed };
@@ -22,7 +23,7 @@ function concession(tone: Company["agent"]["tone"]): number {
 }
 
 export function companyById(id: string): Company {
-  const c = companies.find((x) => x.id === id);
+  const c = allCompanies().find((x) => x.id === id);
   if (!c) throw new Error(`Company ${id} not found`);
   return c;
 }

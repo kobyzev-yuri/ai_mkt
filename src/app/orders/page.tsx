@@ -34,7 +34,11 @@ export default function OrdersPage() {
           const seller = companyById(o.sellerId);
           const buyer = companyById(o.buyerId);
           return (
-            <Link key={o.id} href={`/orders/${o.id}`} className="block border border-line bg-surface p-5 hover:border-brass/40">
+            <Link
+              key={o.id}
+              href={(o.incidents ?? []).some((i) => i.status !== "resolved") ? `/orders/${o.id}/incident` : `/orders/${o.id}`}
+              className="block border border-line bg-surface p-5 hover:border-brass/40"
+            >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <Badge tone={o.status === "settled" ? "moss" : o.status.includes("due") ? "brass" : "live"}>
                   {orderStatusLabel(o.status)}
@@ -46,7 +50,7 @@ export default function OrdersPage() {
                 {packLabel(o.qty, p)} · {buyer.short} → {seller.short} · {deliveryLine(o.incoterm, o.destination)}
               </p>
               {(o.incidents ?? []).some((i) => i.status !== "resolved") && (
-                <p className="mt-2 font-mono text-[11px] uppercase tracking-widest text-terra">открыт инцидент</p>
+                <p className="mt-2 font-mono text-[11px] uppercase tracking-widest text-terra">открыт инцидент · комната претензии</p>
               )}
               <div className="mt-4">
                 <Pipeline status={o.status} compact />

@@ -1,10 +1,12 @@
 export type CompanyRole = "buyer" | "seller" | "both";
 export type AgentTone = "firm" | "flexible" | "premium";
 export type AgentPriority = "price" | "speed" | "quality";
+export type BargainTactic = "market" | "firm" | "fast";
+export type BargainFail = "floor_above_cap" | "seller_held" | "no_overlap";
 export type DealStatus = "open" | "countering" | "agreed" | "rejected" | "approved";
 export type RfqStatus = "matching" | "negotiating" | "awarded" | "closed";
 export type Actor = "buyer-agent" | "seller-agent" | "system" | "human";
-/** Как участник пускает сделку: сам каждый шаг, по допускам или автопилот в мандате. */
+/** По умолчанию threshold: агент торгует, человек — на критическом. manual/auto — выбор участника. */
 export type ControlMode = "manual" | "threshold" | "auto";
 
 export interface AgentProfile {
@@ -17,6 +19,7 @@ export interface AgentProfile {
   /** Порог доверия контрагента, ниже которого автопрохода нет. */
   minTrustToAuto: number;
   controlMode: ControlMode;
+  tactic?: BargainTactic;
   responseMin: number;
 }
 
@@ -45,7 +48,8 @@ export type OrderStatus =
   | "delivered"
   | "acceptance_due"
   | "remainder_due"
-  | "settled";
+  | "settled"
+  | "cancelled";
 export type InvoiceKind = "advance" | "remainder";
 export type InvoiceStatus = "draft" | "issued" | "paid";
 export type DocumentKind = "invoice" | "spec" | "upd" | "ttn" | "cert" | "acceptance";
@@ -311,4 +315,5 @@ export interface MarketplaceState {
   lastSellerId: string;
   /** Живая политика участника поверх сида. Меняет сам кабинет, не бэкофис. */
   policies: Record<string, TradePolicy>;
+  tactics: Record<string, BargainTactic>;
 }

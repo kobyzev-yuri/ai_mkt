@@ -1,4 +1,5 @@
 import { uid } from "./ids";
+import { incidentRoles } from "./incident-desk";
 import { applyTrustHit, INCIDENT_LABEL, proposeRemedy, trustOf } from "./trust";
 import type { Incident, IncidentKind, Order, TrustScore } from "./types";
 
@@ -30,6 +31,7 @@ export function openIncident(
     delayDays,
     proposed: proposeRemedy(kind, delayDays, order.total),
   };
+  const roles = incidentRoles(incident, { ...order, incidents: [...(order.incidents ?? []), incident] });
   return {
     ...order,
     incidents: [...(order.incidents ?? []), incident],
@@ -40,7 +42,7 @@ export function openIncident(
         at: incident.at,
         delayMs: 0,
         stage: "dispute",
-        text: `Инцидент «${INCIDENT_LABEL[kind]}». Агент предлагает: ${incident.proposed.text}`,
+        text: `${roles.reporter.title} зафиксировал «${INCIDENT_LABEL[kind]}». ${roles.proposer.title} предлагает: ${incident.proposed.text}`,
       },
     ],
     playback: false,
@@ -82,7 +84,7 @@ export function acceptRemedy(order: Order, incidentId: string): Order {
         at: new Date().toISOString(),
         delayMs: 0,
         stage: "dispute",
-        text: "Стороны приняли обход без эскалации на площадку. Так закрывается большая часть претензий в первые дни.",
+        text: "Человек заявителя принял обход. Площадка не входит, рейтинг не трогаем.",
       },
     ],
   };
@@ -109,7 +111,7 @@ export function escalateIncident(order: Order, incidentId: string): Order {
         at: new Date().toISOString(),
         delayMs: 0,
         stage: "dispute",
-        text: "Площадка вошла как арбитр. Без документов в контуре претензия не защищена.",
+        text: "Заявитель отклонил обход. Площадка входит как арбитр. Без документов в контуре претензия не защищена.",
       },
     ],
   };
