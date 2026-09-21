@@ -57,7 +57,14 @@ export const SUBNAV: Record<WorkspaceId, NavBlock[]> = {
       label: "Споры",
       items: [{ href: "/office", label: "Арбитраж", match: ["/deals", "/orders"] }],
     },
-    { label: "Поддержка", items: [{ href: "/office/nomenclature", label: "Номенклатура" }, { href: "/office/support", label: "Участники" }] },
+    {
+      label: "Поддержка",
+      items: [
+        { href: "/office/nomenclature", label: "Номенклатура" },
+        { href: "/office/support", label: "Участники" },
+        { href: "/companies", label: "Компании" },
+      ],
+    },
     { label: "Аналитика", items: [{ href: "/trust", label: "Показатели" }] },
   ],
 };
@@ -70,6 +77,7 @@ export function workspaceFromPath(pathname: string, role: CompanyRole = "buyer",
     return "office";
   }
   if (pathname === "/" || pathname.startsWith("/catalog") || pathname.startsWith("/companies")) {
+    if (desk === "office") return "office";
     return "plaza";
   }
   if (pathname.startsWith("/deals") || pathname.startsWith("/orders") || pathname.startsWith("/dashboard")) {

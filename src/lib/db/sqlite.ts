@@ -153,7 +153,7 @@ function seedIfEmpty(db: DatabaseSync) {
   if (deals.n === 0) {
     replaceTrades(db, seedRfqs, seedDeals, seedOrders, new Date().toISOString());
   }
-  seedAccountsIfEmpty(db);
+  ensureSeedRoster(db);
 }
 
 function seedMaster(db: DatabaseSync) {
@@ -215,17 +215,46 @@ function seedMaster(db: DatabaseSync) {
     );
     insList.run(p.id, skuId, p.sellerId, p.sku, p.price, p.stock, p.leadDays);
   }
-  seedAccountsIfEmpty(db);
+  ensureSeedRoster(db);
 }
 
-function seedAccountsIfEmpty(db: DatabaseSync) {
-  const row = db.prepare("SELECT COUNT(*) AS n FROM account").get() as { n: number };
-  if (row.n > 0) return;
-  const ins = db.prepare(
-    `INSERT INTO account (id, pin, desk, company_id, org, person, blurb) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+function insertCompanyRow(db: DatabaseSync, c: (typeof seedCompanies)[number]) {
+  db.prepare(
+    `INSERT INTO company (id, name, short, city, industry, inn, rating, deals_closed, role, blurb, since, agent_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    c.id,
+    c.name,
+    c.short,
+    c.city,
+    c.industry,
+    c.inn,
+    c.rating,
+    c.dealsClosed,
+    c.role,
+    c.blurb,
+    c.since,
+    JSON.stringify(c.agent),
   );
+}
+
+function insertAccountRow(db: DatabaseSync, a: Account) {
+  db.prepare(
+    `INSERT INTO account (id, pin, desk, company_id, org, person, blurb) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(a.id, a.pin, a.desk, a.companyId, a.org, a.person, a.blurb);
+}
+
+function ensureSeedRoster(db: DatabaseSync) {
+  const haveCo = new Set((db.prepare("SELECT id FROM company").all() as { id: string }[]).map((r) => r.id));
+  for (const c of seedCompanies) {
+    if (!haveCo.has(c.id)) insertCompanyRow(db, c);
+  }
+  const haveAcc = new Set((db.prepare("SELECT id FROM account").all() as { id: string }[]).map((r) => r.id));
+  const usedPins = new Set((db.prepare("SELECT pin FROM account").all() as { pin: string }[]).map((r) => r.pin));
   for (const a of ACCOUNTS) {
-    ins.run(a.id, a.pin, a.desk, a.companyId, a.org, a.person, a.blurb);
+    if (haveAcc.has(a.id) || usedPins.has(a.pin)) continue;
+    insertAccountRow(db, a);
+    usedPins.add(a.pin);
   }
 }
 

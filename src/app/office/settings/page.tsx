@@ -1,6 +1,6 @@
 "use client";
 
-import { OLLAMA_MODELS } from "@/lib/ollama";
+import { TIMEWEB_MODELS } from "@/lib/llm-models";
 import { tacticLabel, withTactic } from "@/lib/bargain";
 import type { BargainTactic } from "@/lib/types";
 import { companies } from "@/lib/seed";
@@ -23,7 +23,7 @@ const PRIORITY: Record<string, string> = {
 export default function OfficeSettingsPage() {
   const { llmModel, setLlmModel, resetDemo, lastBuyerId, lastSellerId, tactics } = useStore();
   const [models, setModels] = useState<{ id: string; label: string }[]>(
-    OLLAMA_MODELS.map((m) => ({ id: m.id, label: m.label })),
+    TIMEWEB_MODELS.map((m) => ({ id: m.id, label: m.label })),
   );
   const buyers = companies.filter((c) => c.role !== "seller");
   const sellers = companies.filter((c) => c.role !== "buyer");
@@ -50,8 +50,10 @@ export default function OfficeSettingsPage() {
 
       <section className="mt-10 grid gap-4 md:grid-cols-2">
         <div className="border border-line bg-surface p-5">
-          <h2 className="font-display text-2xl">Локальная модель</h2>
-          <p className="mt-2 text-[13px] text-muted">Ollama озвучивает торг. Цифры считает движок, не эта модель.</p>
+          <h2 className="font-display text-2xl">Модель реплик</h2>
+          <p className="mt-2 text-[13px] text-muted">
+            Timeweb AI Gateway пишет формулировки. Цифры считает движок. Если шлюз молчит — запасной канал Ollama.
+          </p>
           <label className="mt-4 block font-mono text-[10px] uppercase tracking-widest text-muted" htmlFor="office-model">
             Модель реплик
           </label>

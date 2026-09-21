@@ -7,10 +7,15 @@ import { mergeCompanies } from "@/lib/roster";
 import { useSession } from "@/lib/session";
 import type { Company } from "@/lib/types";
 
+function sortedAccounts(): Account[] {
+  const rank = (d: Account["desk"]) => (d === "office" ? 0 : d === "buy" ? 1 : 2);
+  return [...allAccounts()].sort((a, b) => rank(a.desk) - rank(b.desk) || a.pin.localeCompare(b.pin));
+}
+
 export default function LoginPage() {
   const { signIn } = useSession();
   const router = useRouter();
-  const [cards, setCards] = useState<Account[]>(() => allAccounts());
+  const [cards, setCards] = useState<Account[]>(() => sortedAccounts());
   const [password, setPassword] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
 
@@ -20,10 +25,10 @@ export default function LoginPage() {
       .then((data: { accounts?: Account[]; companies?: Company[] }) => {
         if (data.companies?.length) mergeCompanies(data.companies);
         if (data.accounts?.length) mergeAccounts(data.accounts);
-        setCards(allAccounts());
+        setCards(sortedAccounts());
       })
       .catch(() => {
-        setCards(allAccounts());
+        setCards(sortedAccounts());
       });
   }, []);
 

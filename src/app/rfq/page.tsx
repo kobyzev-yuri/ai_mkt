@@ -51,11 +51,11 @@ function RfqComposer({ preset }: { preset: string }) {
       setLlmNote(
         created.llm
           ? `Реплики написал ${created.model}. Цены и пол мандата задал движок.`
-          : `Ollama не ответила — показан шаблон мандата. Модель: ${created.model}.`,
+          : `Модель не ответила — показан шаблон мандата. Канал: ${created.model}.`,
       );
       setPhase("done");
     } catch {
-      setError("Не удалось запустить агента. Проверьте Ollama и попробуйте ещё раз.");
+      setError("Не удалось запустить агента. Проверьте Timeweb-ключ или запасной Ollama.");
       setPhase("idle");
     }
   }
@@ -116,7 +116,7 @@ function RfqComposer({ preset }: { preset: string }) {
         disabled={phase !== "idle" && phase !== "done"}
         className="mt-6 rounded-full bg-brass px-6 py-3 text-[14px] font-medium text-bg disabled:opacity-50"
       >
-        {phase === "idle" || phase === "done" ? "Запустить агента" : `Ollama · ${llmModel}…`}
+        {phase === "idle" || phase === "done" ? "Запустить агента" : `Модель · ${llmModel}…`}
       </button>
       {error ? <p className="mt-3 text-[13px] text-terra">{error}</p> : null}
       {llmNote ? <p className="mt-3 text-[13px] text-brass">{llmNote}</p> : null}
@@ -124,7 +124,7 @@ function RfqComposer({ preset }: { preset: string }) {
       {phase !== "idle" && (
         <ol className="mt-10 space-y-2 font-mono text-[12px] text-muted">
           <Step n="01" active label="Разбор потребности" />
-          <Step n="02" active={phase === "match" || phase === "talk" || phase === "done"} label="Подбор поставщиков" />
+          <Step n="02" active={phase === "match" || phase === "talk" || phase === "done"} label="Подбор партий и сверка спецификации" />
           <Step n="03" active={phase === "talk" || phase === "done"} label="Рассылка запросов и торг" />
           <Step n="04" active={phase === "done"} label="Сводка по комнатам" />
         </ol>

@@ -40,7 +40,7 @@ export const AGENT_ROLES: AgentRole[] = [
     id: "buyer-agent",
     name: "Агент закупки",
     lane: "party",
-    job: "Запрос и встречное в мандате покупателя. Не платит и не утверждает.",
+    job: "Сверяет техническую спецификацию карточки с заявкой. Если спека закрывает запрос — торг в мандате. Если не вполне — зовёт человека. Не платит и не утверждает.",
   },
   {
     id: "seller-agent",
@@ -101,7 +101,8 @@ export const SCENARIOS: Scenario[] = [
     blurb: "От фразы закупщика до согласованных условий в мандате. Три поставщика отвечают параллельно.",
     steps: [
       { id: "parse", title: "Разбор потребности", roles: ["parser", "orchestrator"] },
-      { id: "match", title: "Подбор свободных партий", roles: ["matcher", "mandate"] },
+      { id: "match", title: "Подбор свободных партий", roles: ["matcher"] },
+      { id: "fit", title: "Сверка спецификации", roles: ["buyer-agent"] },
       { id: "talk", title: "Запрос и торг", roles: ["buyer-agent", "seller-agent", "mandate"] },
       { id: "gate", title: "Утверждение сделки", roles: ["human"], human: true },
     ],

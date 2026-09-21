@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
-import { listOllamaModels, OLLAMA_HOST, OLLAMA_MODELS } from "@/lib/ollama";
+import { TIMEWEB_MODELS } from "@/lib/llm-models";
+import { listTimewebModels, timewebConfigured, timewebPicker } from "@/lib/timeweb";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const live = await listOllamaModels();
-  const preferred = OLLAMA_MODELS.filter((m) => live.includes(m.id));
-  const extra = live.filter((name) => !OLLAMA_MODELS.some((m) => m.id === name));
+  const live = await listTimewebModels();
+  const models = live.length ? timewebPicker(live) : TIMEWEB_MODELS.map((m) => ({ id: m.id, label: m.label, hint: m.hint }));
   return NextResponse.json({
-    host: OLLAMA_HOST,
-    models: [
-      ...preferred.map((m) => ({ id: m.id, label: m.label, hint: m.hint })),
-      ...extra.map((id) => ({ id, label: id, hint: "установлена локально" })),
-    ],
+    host: "https://api.timeweb.ai/v1",
+    channel: timewebConfigured() ? "timeweb" : "ollama",
+    models,
   });
 }

@@ -11,7 +11,7 @@ import {
   isLiveOrder,
   orderGateAction,
 } from "@/lib/buy-desk";
-import { compactRub, dealStatusLabel, orderStatusLabel } from "@/lib/format";
+import { compactRub, dealOutcomeLabel, orderStatusLabel } from "@/lib/format";
 import { useStore } from "@/lib/store";
 
 export default function BuyLivePage() {
@@ -27,7 +27,7 @@ export default function BuyLivePage() {
         return {
           href: `/deals/${d.id}`,
           action: "Утвердить сделку",
-          status: dealStatusLabel(d.status),
+          status: dealOutcomeLabel(d),
           title: p.name,
           party: companyById(d.sellerId).short,
           money: d.currentPrice * d.qty,
@@ -55,7 +55,7 @@ export default function BuyLivePage() {
         const p = productById(d.productId);
         return {
           href: `/deals/${d.id}`,
-          status: dealStatusLabel(d.status),
+          status: dealOutcomeLabel(d),
           title: p.name,
           party: companyById(d.sellerId).short,
           money: d.currentPrice * d.qty,

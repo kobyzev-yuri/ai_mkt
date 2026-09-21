@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isDemoApp } from "@/lib/app-mode";
 import { parseBuyerNeed } from "@/lib/llm-agents";
-import { allowedModel, DEFAULT_MODEL } from "@/lib/ollama";
+import { allowedModel, DEFAULT_MODEL } from "@/lib/llm-models";
 import { parseNeed } from "@/lib/parse-need";
 
 export const maxDuration = 60;

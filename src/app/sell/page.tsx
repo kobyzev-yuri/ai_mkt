@@ -12,7 +12,7 @@ import {
   sellerOrderGate,
   sellerOrders,
 } from "@/lib/sell-desk";
-import { compactRub, dealStatusLabel, orderStatusLabel } from "@/lib/format";
+import { compactRub, dealOutcomeLabel, orderStatusLabel } from "@/lib/format";
 import { useStore } from "@/lib/store";
 
 export default function SellLivePage() {
@@ -28,7 +28,7 @@ export default function SellLivePage() {
         return {
           href: `/deals/${d.id}`,
           action: sellerDealGate(d)!,
-          status: dealStatusLabel(d.status),
+          status: dealOutcomeLabel(d),
           title: p.name,
           party: companyById(d.buyerId).short,
           money: d.currentPrice * d.qty,
@@ -56,7 +56,7 @@ export default function SellLivePage() {
         const p = productById(d.productId);
         return {
           href: `/deals/${d.id}`,
-          status: dealStatusLabel(d.status),
+          status: dealOutcomeLabel(d),
           title: p.name,
           party: companyById(d.buyerId).short,
           money: d.currentPrice * d.qty,

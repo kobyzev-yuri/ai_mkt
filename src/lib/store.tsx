@@ -8,7 +8,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { createRfq as runRfq } from "./agents";
+import { acceptSpecAndBargain, createRfq as runRfq } from "./agents";
 import { withTactic } from "./bargain";
 import { applyAcceptance, applyAdvancePayment, applyRemainderPayment, createOrderFromDeal } from "./fulfillment";
 import { uid } from "./ids";
@@ -16,13 +16,13 @@ import { consumeLots, releaseLots } from "./inventory";
 import { openIncidents, reportableKinds } from "./incident-desk";
 import { acceptRemedy, escalateIncident, openIncident, platformResolve, platformUnwind } from "./ops";
 import { BUYER_ID, SELLER_ID, companies, DEMO_PROMPTS, lots as seedLots, seedDeals, seedOrders, seedRfqs } from "./seed";
-import { DEFAULT_MODEL } from "./ollama";
+import { DEFAULT_MODEL, migrateLlmModel } from "./llm-models";
 import { applyPolicy, bestAutoPass, policyOf } from "./policy";
 import { allCompanies } from "./roster";
 import { seedTrust } from "./trust";
 import type { AuditEvent, BargainTactic, Company, Deal, IncidentKind, Lot, MarketplaceState, Order, Rfq, TradePolicy } from "./types";
 
-const KEY = "atrium-marketplace-v5";
+const KEY = "atrium-marketplace-v7";
 
 const initial: MarketplaceState = {
   currentCompanyId: BUYER_ID,
@@ -42,11 +42,11 @@ const initial: MarketplaceState = {
 function hydrate(parsed: Partial<MarketplaceState> & { currentCompanyId: string }): MarketplaceState {
   return {
     currentCompanyId: parsed.currentCompanyId,
-    llmModel: parsed.llmModel || DEFAULT_MODEL,
+    llmModel: migrateLlmModel(parsed.llmModel),
     rfqs: parsed.rfqs ?? seedRfqs,
     deals: parsed.deals ?? seedDeals,
     orders: (parsed.orders ?? seedOrders).map((o) => ({ ...o, incidents: o.incidents ?? [] })),
-    lots: parsed.lots ?? seedLots.map((l) => ({ ...l })),
+    lots: parsed.lots?.length ? parsed.lots : seedLots.map((l) => ({ ...l })),
     reputations: parsed.reputations ?? { ...seedTrust },
     auditLog: parsed.auditLog ?? [],
     lastBuyerId: parsed.lastBuyerId ?? BUYER_ID,
@@ -64,7 +64,7 @@ function readPersisted(): MarketplaceState {
     const raw = localStorage.getItem(KEY);
     if (!raw) return initial;
     const parsed = JSON.parse(raw) as Partial<MarketplaceState> & { currentCompanyId?: string };
-    if (parsed?.rfqs && parsed?.deals && parsed?.orders && parsed?.lots && parsed.currentCompanyId) {
+    if (parsed?.rfqs && parsed?.deals && parsed?.orders && parsed.currentCompanyId) {
       return hydrate({ ...parsed, currentCompanyId: parsed.currentCompanyId });
     }
   } catch {
@@ -106,7 +106,7 @@ function commitApprove(id: string, source: "human" | "policy", note?: string): s
   const deal = memory.deals.find((d) => d.id === id);
   if (!deal) return undefined;
   if (deal.status === "approved") return deal.orderId;
-  if (deal.status === "rejected") return undefined;
+  if (deal.status !== "agreed") return undefined;
   const rfq = memory.rfqs.find((r) => r.id === deal.rfqId);
   const { order, lots } = createOrderFromDeal(deal, rfq, memory.lots);
   const deals = memory.deals.map((d) =>
@@ -187,6 +187,7 @@ type Store = MarketplaceState & {
   setPolicy: (patch: Partial<TradePolicy>) => void;
   approveDeal: (id: string) => string | undefined;
   rejectDeal: (id: string) => void;
+  acceptSpec: (id: string) => void;
   payAdvance: (orderId: string) => void;
   acceptDelivery: (orderId: string) => void;
   payRemainder: (orderId: string) => void;
@@ -258,7 +259,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               actor: "mandate",
               action: "Торг в мандате",
               detail: data.deals
-                .map((d) => `${d.status} · ${d.currentPrice} ₽ · пол ${d.floorPrice} ₽`)
+                .map((d) => `${d.status} · ${d.currentPrice} ₽`)
                 .join("; ")
                 .slice(0, 280),
               constraint: "LLM не меняет цену, qty и статус",
@@ -314,15 +315,54 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const approveDeal = useCallback((id: string) => commitApprove(id, "human"), []);
 
   const rejectDeal = useCallback((id: string) => {
+    const deal = memory.deals.find((d) => d.id === id);
+    if (!deal || (deal.status !== "agreed" && deal.status !== "countering" && deal.status !== "open")) return;
     persist(
       withAudit(
         {
           ...memory,
-          deals: memory.deals.map((d) => (d.id === id ? { ...d, status: "rejected" as const, playback: false } : d)),
+          deals: memory.deals.map((d) =>
+            d.id === id
+              ? {
+                  ...d,
+                  status: "rejected" as const,
+                  playback: false,
+                  rejectReason: deal.status === "open" ? "item_mismatch" : d.rejectReason,
+                }
+              : d,
+          ),
         },
-        [{ actor: "human", action: "Отклонение сделки", detail: id, ref: id }],
+        [
+          {
+            actor: "human",
+            action: deal.status === "open" ? "Предмет снят" : deal.status === "countering" ? "Стороны разошлись" : "Отклонение сделки",
+            detail: deal.status === "open" ? "Человек не принял позицию по спецификации." : deal.status === "countering" ? "Сделка не состоялась: пакет не сошёлся." : id,
+            ref: id,
+          },
+        ],
       ),
     );
+  }, []);
+
+  const acceptSpec = useCallback((id: string) => {
+    const deal = memory.deals.find((d) => d.id === id);
+    const rfq = deal ? memory.rfqs.find((r) => r.id === deal.rfqId) : undefined;
+    if (!deal || !rfq || deal.status !== "open") return;
+    const next = acceptSpecAndBargain(deal, rfq, memory.reputations);
+    persist(
+      withAudit(
+        { ...memory, deals: memory.deals.map((d) => (d.id === id ? next : d)) },
+        [
+          {
+            actor: "human",
+            action: "Предмет принят",
+            detail: "Спецификация неполная, человек разрешил торг",
+            ref: id,
+          },
+        ],
+      ),
+    );
+    autoAwardIfAllowed(rfq.id);
   }, []);
 
   const patchOrder = (orderId: string, next: Order, entries: Omit<AuditEvent, "id" | "at">[]) => {
@@ -477,7 +517,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const resetDemo = useCallback(() => {
     persist({
       currentCompanyId: BUYER_ID,
-      llmModel: memory.llmModel || DEFAULT_MODEL,
+      llmModel: migrateLlmModel(memory.llmModel),
       rfqs: seedRfqs,
       deals: seedDeals,
       orders: seedOrders,
@@ -571,6 +611,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     prepareShowcase,
     approveDeal,
     rejectDeal,
+    acceptSpec,
     payAdvance,
     acceptDelivery,
     payRemainder,

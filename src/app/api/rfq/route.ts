@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createRfq } from "@/lib/agents";
 import { enrichNeed, voiceDeals } from "@/lib/llm-agents";
-import { allowedModel, DEFAULT_MODEL } from "@/lib/ollama";
+import { allowedModel, DEFAULT_MODEL } from "@/lib/llm-models";
 import { companies } from "@/lib/seed";
 import type { TrustScore } from "@/lib/types";
 

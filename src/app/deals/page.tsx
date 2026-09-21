@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
-import { compactRub, dealStatusLabel, qty } from "@/lib/format";
+import { compactRub, dealOutcomeLabel, qty } from "@/lib/format";
 import { useStore } from "@/lib/store";
 
 export default function DealsPage() {
@@ -45,7 +45,7 @@ export default function DealsPage() {
                           : "live"
                     }
                   >
-                    {dealStatusLabel(d.status)}
+                    {dealOutcomeLabel(d)}
                   </Badge>
                   <span className="font-mono text-[11px] text-muted">
                     {buyer.short} ↔ {seller.short}

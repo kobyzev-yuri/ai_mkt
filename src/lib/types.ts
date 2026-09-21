@@ -2,10 +2,12 @@ export type CompanyRole = "buyer" | "seller" | "both";
 export type AgentTone = "firm" | "flexible" | "premium";
 export type AgentPriority = "price" | "speed" | "quality";
 export type BargainTactic = "market" | "firm" | "fast";
-export type BargainFail = "floor_above_cap" | "seller_held" | "no_overlap";
+export type BargainFail = "floor_above_cap" | "seller_held" | "no_overlap" | "item_mismatch";
+export type SpecFit = "match" | "partial" | "mismatch";
 export type DealStatus = "open" | "countering" | "agreed" | "rejected" | "approved";
 export type RfqStatus = "matching" | "negotiating" | "awarded" | "closed";
 export type Actor = "buyer-agent" | "seller-agent" | "system" | "human";
+export type RejectCard = { fact: string; nextStep: string };
 /** По умолчанию threshold: агент торгует, человек — на критическом. manual/auto — выбор участника. */
 export type ControlMode = "manual" | "threshold" | "auto";
 
@@ -99,6 +101,13 @@ export interface Allocation {
   readyDays: number;
 }
 
+export interface SpecCheck {
+  fit: SpecFit;
+  hits: string[];
+  gaps: string[];
+  clashes: string[];
+}
+
 export interface Need {
   query: string;
   category?: string;
@@ -159,6 +168,12 @@ export interface Deal {
   score: number;
   playback: boolean;
   matchReasons: string[];
+  specFit?: SpecFit;
+  specHits?: string[];
+  specGaps?: string[];
+  specClashes?: string[];
+  specAccepted?: boolean;
+  rejectReason?: BargainFail;
   orderId?: string;
   voicedBy?: string;
   /** Сделка утверждена допуском политики, а не кнопкой человека. */

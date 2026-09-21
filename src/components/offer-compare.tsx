@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
-import { compactRub, days, dealStatusLabel, deliveryLine, rub } from "@/lib/format";
+import { compactRub, days, dealOutcomeLabel, deliveryLine, rub } from "@/lib/format";
 import { partnerDossier } from "@/lib/partner-context";
 import { autoPassVerdict } from "@/lib/policy";
 import type { Deal, Order, TradePolicy, TrustScore } from "@/lib/types";
@@ -54,7 +54,13 @@ export function OfferCompare({
                     {dossier.score} · отгрузки {dossier.onTimeShipPct}%
                   </p>
                   <p className="mt-0.5 text-[12px] text-muted">
-                    {verdict.ok ? "допуск" : viewerId ? "нужен человек" : dossier.headline}
+                    {d.status === "open" && d.specFit && d.specFit !== "match"
+                      ? "нужен человек"
+                      : verdict.ok
+                        ? "допуск"
+                        : viewerId
+                          ? "нужен человек"
+                          : dossier.headline}
                   </p>
                 </td>
                 <td className="px-4 py-3 font-mono text-brass">
@@ -74,7 +80,7 @@ export function OfferCompare({
                           : "live"
                     }
                   >
-                    {d.passedByPolicy ? "по допуску" : dealStatusLabel(d.status)}
+                    {dealOutcomeLabel(d)}
                   </Badge>
                 </td>
               </tr>

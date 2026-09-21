@@ -1,20 +1,16 @@
+import { bargainFailCopy, roundPrice, runBargain, tacticOf } from "./bargain";
 import { days, deliveryLine, num, rub } from "./format";
 import { isoOffset, uid } from "./ids";
 import { allocateLots, freeQty, lotsForProduct } from "./inventory";
 import { packCount, packLabel, packingOf, snapToPack } from "./packing";
 import { parseNeed } from "./parse-need";
+import { specFit } from "./spec-fit";
 import { trustOf } from "./trust";
 import { allCompanies } from "./roster";
 import { lots as seedLots, products } from "./seed";
 import type { Company, Deal, Message, Need, Offer, Product, Rfq, TrustScore } from "./types";
 
 export { parseNeed };
-
-function roundPrice(n: number): number {
-  if (n >= 1000) return Math.round(n / 10) * 10;
-  if (n >= 100) return Math.round(n);
-  return Math.round(n * 100) / 100;
-}
 
 function concession(tone: Company["agent"]["tone"]): number {
   if (tone === "flexible") return 0.16;
@@ -45,7 +41,7 @@ export function matchProducts(
     .filter((product) => !need.category || product.category === need.category)
     .map((product) => {
       const seller = companyById(product.sellerId);
-      const blob = `${product.name} ${product.category} ${product.tags.join(" ")} ${product.description}`.toLowerCase();
+      const blob = `${product.name} ${product.category} ${product.tags.join(" ")} ${product.description} ${Object.values(product.specs).join(" ")}`.toLowerCase();
       let score = 0;
       const reasons: string[] = [];
 
@@ -60,7 +56,7 @@ export function matchProducts(
         if (blob.includes(k.toLowerCase()) || product.tags.some((t) => t.includes(k))) hits += 1;
       }
       score += Math.min(30, hits * 6);
-      if (hits >= 2) reasons.push("Совпадение по спецификации");
+      if (hits >= 2) reasons.push("Совпадение по словам заявки");
 
       if (need.city && seller.city === need.city) {
         score += 16;
@@ -115,11 +111,6 @@ function floorPrice(product: Product, seller: Company, qty: number): number {
   return roundPrice(product.price * (1 - concession(seller.agent.tone) - vol));
 }
 
-function askPrice(product: Product, qty: number): number {
-  const tight = qty < product.moq * 2;
-  return roundPrice(product.price * (tight ? 1.06 : 1));
-}
-
 export function createRfq(
   buyerId: string,
   query: string,
@@ -132,13 +123,12 @@ export function createRfq(
   const matches = matchProducts(need, reputations).slice(0, 3);
   const rfqId = uid("rfq");
   const rawQty = need.qty ?? Math.max(matches[0]?.product.moq ?? 1, Math.round((matches[0]?.product.moq ?? 1) * 8));
-  const qty = matches[0] ? snapToPack(rawQty, matches[0].product) : rawQty;
 
   const rfq: Rfq = {
     id: rfqId,
     buyerId,
     createdAt: now.toISOString(),
-    need: { ...need, qty },
+    need: { ...need, qty: matches[0] ? snapToPack(rawQty, matches[0].product) : rawQty },
     status: matches.length ? "negotiating" : "closed",
   };
 
@@ -147,21 +137,13 @@ export function createRfq(
       rfq,
       buyer,
       product: m.product,
-      qty,
+      qty: snapToPack(rawQty, m.product),
       matchReasons: m.reasons,
       stagger: i * 400,
       now,
       reputations,
     }),
   );
-
-  if (deals.some((d) => d.status === "agreed")) {
-    const best = [...deals].filter((d) => d.status === "agreed").sort((a, b) => b.score - a.score)[0];
-    if (best) {
-      rfq.awardedDealId = best.id;
-      rfq.status = "awarded";
-    }
-  }
 
   return { rfq, deals };
 }
@@ -175,15 +157,16 @@ function negotiate(opts: {
   stagger: number;
   now: Date;
   reputations?: Record<string, TrustScore>;
+  forceBargain?: boolean;
+  keepId?: string;
+  priorMessages?: Message[];
+  playback?: boolean;
 }): Deal {
   const { rfq, buyer, product, qty, matchReasons, now, reputations } = opts;
   const seller = companyById(product.sellerId);
   const list = product.price;
   const floor = floorPrice(product, seller, qty);
-  const ask = askPrice(product, qty);
   const budgetCap = rfq.need.budget ? rfq.need.budget / qty : list * 0.98;
-  const buyerTarget = rfq.need.budget ? Math.min(budgetCap * 0.92, ask * 0.9) : ask * 0.88;
-  const counter = roundPrice(Math.max(buyerTarget, floor * 0.97));
   const payScore = trustOf(buyer.id, reputations).onTimePayPct;
   const riskPay = payScore < 85;
   const openingPrepay = riskPay ? 60 : 50;
@@ -201,16 +184,20 @@ function negotiate(opts: {
   const lotLine = plan.allocations.length
     ? plan.allocations.map((a) => `${a.batchNo} · ${num(a.qty)}\u00a0${product.unit} · ${a.warehouse}`).join("; ")
     : "слот производства";
+  const spec = specFit(rfq.need, product);
   const reasons = [
     ...matchReasons,
     packLabel(qty, product),
     plan.ok ? `Партии: ${plan.allocations.map((a) => a.batchNo).join(", ")}` : "Не хватает свободных партий",
+    ...spec.hits,
+    ...spec.gaps,
+    ...spec.clashes,
   ];
 
   const leadOk = product.leadDays <= deadline;
   const leadDays = Math.max(product.leadDays, plan.leadDays);
-
-  const messages: Message[] = [];
+  const shipTerms = deliveryLine(incoterm, incoterm === "DAP" ? destination : seller.city);
+  const messages: Message[] = [...(opts.priorMessages ?? [])];
   const offers: Offer[] = [];
   let t = 0;
   const push = (from: Message["from"], text: string, addMin: number) => {
@@ -224,151 +211,150 @@ function negotiate(opts: {
     });
   };
 
-  push(
-    "system",
-    `Агент «${buyer.agent.name}» направил запрос поставщику ${seller.short}. Мандат покупателя: ${buyer.agent.mandate}`,
-    1,
-  );
-
-  push(
-    "seller-agent",
-    `Агент «${seller.agent.name}»: по «${product.name}» собираем ${packLabel(qty, product)}. Партии: ${lotLine}. Предложение: ${rub(ask)}/${product.unit}, отгрузка ${days(leadDays)}, предоплата ${openingPrepay}%${
-      riskPay ? ` (оплаты покупателя в срок ${payScore}% — поднимаем аванс)` : ""
-    }, ${deliveryLine(incoterm, incoterm === "DAP" ? destination : seller.city)}.`,
-    seller.agent.responseMin,
-  );
-  offers.push({
-    id: uid("off"),
-    from: "seller",
-    price: ask,
-    qty,
-    leadDays,
-    prepayPct: openingPrepay,
-    terms: deliveryLine(incoterm, incoterm === "DAP" ? destination : seller.city),
-    at: isoOffset(now, t),
+  const withSpec = (deal: Omit<Deal, "specFit" | "specHits" | "specGaps" | "specClashes" | "specAccepted">): Deal => ({
+    ...deal,
+    specFit: spec.fit,
+    specHits: spec.hits,
+    specGaps: spec.gaps,
+    specClashes: spec.clashes,
+    specAccepted: Boolean(opts.forceBargain && spec.fit !== "match"),
   });
 
-  push(
-    "buyer-agent",
-    `Агент «${buyer.agent.name}»: ${
-      rfq.need.budget ? `бюджет заявки ${rub(rfq.need.budget)}.` : "идём от рынка."
-    } Встречное: ${rub(counter)}/${product.unit}, предоплата ${wantPrepay}%${
-      rfq.need.city ? `, поставка в ${rfq.need.city}` : ""
-    }. ${buyer.agent.priority === "speed" ? "Срок критичен — готов закрыть быстрее дороже." : "Есть конкурирующие заявки, цена решающая."}`,
-    buyer.agent.responseMin,
-  );
-  offers.push({
-    id: uid("off"),
-    from: "buyer",
-    price: counter,
-    qty,
-    leadDays,
-    prepayPct: wantPrepay,
-    terms: rfq.need.city ? `поставка ${rfq.need.city}` : "самовывоз",
-    at: isoOffset(now, t),
-  });
-
-  let status: Deal["status"] = "countering";
-  let current = ask;
-  let prepay = openingPrepay;
-  const finalLead = leadDays;
-
-  if (counter >= floor) {
-    const mid = roundPrice((ask + Math.max(counter, floor)) / 2);
-    const concede = seller.agent.tone === "premium" ? roundPrice(Math.max(floor * 1.04, ask * 0.97)) : mid;
-    const sellerStep = roundPrice(Math.max(floor, concede));
-    current = sellerStep;
-    prepay = seller.agent.tone === "premium" ? openingPrepay : Math.max(wantPrepay, riskPay ? 50 : 40);
-    if (rfq.need.city && seller.agent.tone !== "firm") {
-      push(
-        "seller-agent",
-        `Агент «${seller.agent.name}»: доставку до ${rfq.need.city} берём. Могу ${rub(sellerStep)} при предоплате ${prepay}%. Пол мандата — ${rub(floor)}. Это край уступки.`,
-        seller.agent.responseMin,
-      );
-    } else {
-      push(
-        "seller-agent",
-        `Агент «${seller.agent.name}»: ${rub(counter)} ниже комфортной зоны. Фиксирую ${rub(sellerStep)}, предоплата ${prepay}%. Ниже ${rub(floor)} — ломаем маржу ${seller.agent.minMarginPct}%.`,
-        seller.agent.responseMin,
-      );
-    }
-    offers.push({
-      id: uid("off"),
-      from: "seller",
-      price: sellerStep,
-      qty,
-      leadDays: finalLead,
-      prepayPct: prepay,
-      terms: rfq.need.city ? `доставка ${rfq.need.city}` : deliveryLine("FCA", seller.city),
-      at: isoOffset(now, t),
-    });
-
-    if (sellerStep <= budgetCap * 1.02) {
-      status = "agreed";
-      current = sellerStep;
-      push(
-        "buyer-agent",
-        `Агент «${buyer.agent.name}»: ${rub(sellerStep)} в мандате${
-          rfq.need.budget ? ` (потолок ${rub(budgetCap)}/${product.unit})` : ""
-        }. Срок ${days(finalLead)} принимаем. Акцепт, ждём счёт.`,
-        buyer.agent.responseMin,
-      );
-      push(
-        "system",
-        `Стороны сошлись: ${num(qty)}\u00a0${product.unit} × ${rub(current)}, ${days(finalLead)}, предоплата ${prepay}%. Нужно утверждение закупщика.`,
-        1,
-      );
-    } else {
-      push(
-        "buyer-agent",
-        `Агент «${buyer.agent.name}»: ${rub(sellerStep)} выше потолка ${rub(budgetCap)}. Мандат не пускает. Оставляем заявку открытой на случай новой уступки.`,
-        buyer.agent.responseMin,
-      );
-      push("system", "Не сошлись по цене: потолок покупателя ниже последнего шага продавца.", 1);
-      status = "rejected";
-    }
-  } else {
-    const last = roundPrice(floor * 1.01);
-    current = last;
+  if (spec.fit !== "match" && !opts.forceBargain) {
     push(
-      "seller-agent",
-      `Агент «${seller.agent.name}»: ${rub(counter)} ниже пола ${rub(floor)} (мандат: маржа ≥ ${seller.agent.minMarginPct}%). Край: ${rub(last)}, предоплата 50%. Дальше — только человек.`,
-      seller.agent.responseMin,
+      "system",
+      `Подбор нашёл «${product.name}». Агент «${buyer.agent.name}» сверяет заявку с технической спецификацией карточки — до этого торга нет.`,
+      1,
     );
-    offers.push({
-      id: uid("off"),
-      from: "seller",
-      price: last,
+    const covered = spec.hits.length ? spec.hits.join("; ") : "точных попаданий по спеке нет";
+    const missing = [...spec.clashes, ...spec.gaps].join("; ");
+    push(
+      "buyer-agent",
+      spec.fit === "mismatch"
+        ? `Агент «${buyer.agent.name}»: спецификация противоречит заявке. ${missing}. Закрывает: ${covered}. Без человека этот предмет не торгую.`
+        : `Агент «${buyer.agent.name}»: спецификация не закрывает заявку целиком. Есть: ${covered}. Не закрыто: ${missing}. Нужен человек — подтвердить предмет или снять.`,
+      buyer.agent.responseMin,
+    );
+    push("system", bargainFailCopy("item_mismatch").fact, 1);
+    return withSpec({
+      id: opts.keepId ?? uid("deal"),
+      rfqId: rfq.id,
+      buyerId: buyer.id,
+      sellerId: seller.id,
+      productId: product.id,
       qty,
-      leadDays: finalLead,
-      prepayPct: 50,
-      terms: deliveryLine("FCA", seller.city),
-      at: isoOffset(now, t),
+      status: "open",
+      messages,
+      offers,
+      listPrice: list,
+      floorPrice: floor,
+      currentPrice: list,
+      leadDays,
+      prepayPct: openingPrepay,
+      incoterm,
+      destination,
+      packCount: packCount(qty, product),
+      score: Math.round(Math.min(70, 20 + seller.rating * 4)),
+      playback: opts.playback ?? true,
+      matchReasons: reasons,
+      rejectReason: "item_mismatch",
     });
+  }
 
-    if (last <= budgetCap * 1.03 && buyer.agent.tone !== "firm") {
-      status = "agreed";
-      current = last;
-      prepay = 50;
+  const bargain = runBargain({
+    list,
+    floor,
+    cap: budgetCap,
+    sellerTactic: tacticOf(seller),
+    buyerTactic: tacticOf(buyer),
+    openingPrepay,
+    wantPrepay,
+  });
+
+  if (opts.forceBargain && spec.fit !== "match") {
+    push(
+      "system",
+      `Человек принял предмет «${product.name}» при неполной спецификации. Агенты открывают торг в мандате.`,
+      1,
+    );
+  } else {
+    push(
+      "system",
+      `Агент «${buyer.agent.name}» сверил спецификацию: заявка закрыта. Запрос поставщику ${seller.short}.${
+        rfq.need.budget ? ` Потолок заявки ${rub(budgetCap)}/${product.unit}.` : ""
+      }`,
+      1,
+    );
+  }
+
+  const finalLead = leadDays;
+  bargain.ticks.forEach((tick, i) => {
+    const agent = tick.from === "seller" ? seller.agent.name : buyer.agent.name;
+    const wait = tick.from === "seller" ? seller.agent.responseMin : buyer.agent.responseMin;
+    if (i === 0 && tick.from === "seller") {
+      push(
+        "seller-agent",
+        `Агент «${seller.agent.name}»: по «${product.name}» собираем ${packLabel(qty, product)}. Партии: ${lotLine}. Предложение: ${rub(tick.price)}/${product.unit}, отгрузка ${days(leadDays)}, предоплата ${tick.prepayPct}%${
+          riskPay ? ` (оплаты покупателя в срок ${payScore}% — поднимаем аванс)` : ""
+        }, ${shipTerms}.`,
+        wait,
+      );
+    } else if (tick.from === "buyer") {
       push(
         "buyer-agent",
-        `Агент «${buyer.agent.name}»: на пределе, но срок и наличие важнее. Берём ${rub(last)}.`,
-        buyer.agent.responseMin,
-      );
-      push(
-        "system",
-        `Стороны сошлись на пределе мандатов: ${num(qty)}\u00a0${product.unit} × ${rub(current)}. Нужно утверждение.`,
-        1,
+        `Агент «${agent}»: ${
+          rfq.need.budget ? `бюджет заявки ${rub(rfq.need.budget)}.` : "идём от рынка."
+        } Встречное: ${rub(tick.price)}/${product.unit}, предоплата ${tick.prepayPct}%${
+          rfq.need.city ? `, поставка в ${rfq.need.city}` : ""
+        }. ${buyer.agent.priority === "speed" ? "Срок критичен — готов закрыть быстрее дороже." : "Есть конкурирующие заявки, цена решающая."}`,
+        wait,
       );
     } else {
-      status = "rejected";
       push(
-        "buyer-agent",
-        `Агент «${buyer.agent.name}»: даже край ${rub(last)} не проходит в бюджет. Снимаем этого поставщика.`,
-        buyer.agent.responseMin,
+        "seller-agent",
+        `Агент «${agent}»: ${
+          rfq.need.city && seller.agent.tone !== "firm" ? `доставку до ${rfq.need.city} берём. ` : ""
+        }Могу ${rub(tick.price)} при предоплате ${tick.prepayPct}%. Это край уступки в этом круге.`,
+        wait,
       );
-      push("system", "Сделка сорвана: цена продавца не входит в мандат покупателя.", 1);
     }
+    offers.push({
+      id: uid("off"),
+      from: tick.from,
+      price: tick.price,
+      qty,
+      leadDays: finalLead,
+      prepayPct: tick.prepayPct,
+      terms: tick.from === "buyer" && rfq.need.city ? `поставка ${rfq.need.city}` : shipTerms,
+      at: isoOffset(now, t),
+    });
+  });
+
+  const current = bargain.price;
+  const prepay = bargain.prepayPct;
+  const status: Deal["status"] = bargain.agreed ? "agreed" : "rejected";
+
+  if (bargain.agreed) {
+    push(
+      "buyer-agent",
+      `Агент «${buyer.agent.name}»: ${rub(current)} в мандате${
+        rfq.need.budget ? ` (потолок ${rub(budgetCap)}/${product.unit})` : ""
+      }. Срок ${days(finalLead)} принимаем. Акцепт, ждём счёт.`,
+      buyer.agent.responseMin,
+    );
+    push(
+      "system",
+      `Стороны сошлись: ${num(qty)}\u00a0${product.unit} × ${rub(current)}, ${days(finalLead)}, предоплата ${prepay}%. Нужно утверждение человека — агенты сделку не закрывают.`,
+      1,
+    );
+  } else {
+    const copy = bargainFailCopy(bargain.fail ?? "no_overlap");
+    push(
+      "buyer-agent",
+      `Агент «${buyer.agent.name}»: ${rub(current)} не проходит в мандат. Снимаем этого поставщика.`,
+      buyer.agent.responseMin,
+    );
+    push("system", copy.fact, 1);
   }
 
   const priceScore = Math.max(0, 40 - ((current - floor) / (list || 1)) * 80);
@@ -379,8 +365,8 @@ function negotiate(opts: {
     Math.min(99, priceScore + leadScore + cityScore + statusScore + seller.rating * 4),
   );
 
-  return {
-    id: uid("deal"),
+  return withSpec({
+    id: opts.keepId ?? uid("deal"),
     rfqId: rfq.id,
     buyerId: buyer.id,
     sellerId: seller.id,
@@ -398,7 +384,25 @@ function negotiate(opts: {
     destination,
     packCount: packCount(qty, product),
     score,
-    playback: true,
+    playback: opts.playback ?? true,
     matchReasons: reasons,
-  };
+    rejectReason: bargain.agreed ? undefined : bargain.fail,
+  });
+}
+
+export function acceptSpecAndBargain(deal: Deal, rfq: Rfq, reputations?: Record<string, TrustScore>): Deal {
+  return negotiate({
+    rfq,
+    buyer: companyById(deal.buyerId),
+    product: productById(deal.productId),
+    qty: deal.qty,
+    matchReasons: deal.matchReasons,
+    stagger: 0,
+    now: new Date(),
+    reputations,
+    forceBargain: true,
+    keepId: deal.id,
+    priorMessages: deal.messages,
+    playback: false,
+  });
 }

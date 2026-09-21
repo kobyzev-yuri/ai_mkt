@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { Badge } from "@/components/ui";
-import { productById } from "@/lib/agents";
+import { allProducts } from "@/lib/catalog";
 import { days, num } from "@/lib/format";
 import { freeQty } from "@/lib/inventory";
+import { useSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
 
 export default function SellLotsPage() {
+  const { account } = useSession();
   const { company, lots } = useStore();
-  const mine = lots.filter((l) => l.sellerId === company.id);
+  const sellerId = account?.companyId || company.id;
+  const mine = lots.filter((l) => l.sellerId === sellerId);
   const free = mine.reduce((s, l) => s + freeQty(l), 0);
   const reserved = mine.reduce((s, l) => s + l.reserved, 0);
 
@@ -36,7 +39,7 @@ export default function SellLotsPage() {
           </p>
         ) : (
           mine.map((lot) => {
-            const p = productById(lot.productId);
+            const p = allProducts().find((x) => x.id === lot.productId);
             return (
               <div key={lot.id} className="flex flex-col gap-2 bg-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -45,7 +48,7 @@ export default function SellLotsPage() {
                     {lot.readyDays === 0 ? <Badge tone="moss">с наличия</Badge> : <Badge>через {days(lot.readyDays)}</Badge>}
                     {lot.reserved > 0 ? <Badge tone="brass">резерв {num(lot.reserved)}</Badge> : null}
                   </div>
-                  <p className="mt-2 font-display text-xl">{p.name}</p>
+                  <p className="mt-2 font-display text-xl">{p?.name ?? lot.batchNo}</p>
                   <p className="text-[13px] text-muted">{lot.warehouse}</p>
                 </div>
                 <p className="font-mono text-[13px] text-brass">

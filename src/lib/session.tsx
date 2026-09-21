@@ -98,6 +98,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const hydrated = useSyncExternalStore(noopSubscribe, clientTrue, serverFalse);
 
   useEffect(() => {
+    if (account?.companyId) setCompany(account.companyId);
+  }, [account?.companyId, setCompany]);
+
+  useEffect(() => {
     fetch("/api/db/roster")
       .then((r) => r.json())
       .then((data: { accounts?: Account[]; companies?: { id: string }[] }) => {

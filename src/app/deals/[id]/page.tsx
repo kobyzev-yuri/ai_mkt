@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DocumentPackPreview } from "@/components/document-pack";
+import { SpecSheet } from "@/components/spec-sheet";
 import { PartnerContextCard } from "@/components/partner-context";
+import { RejectCardView } from "@/components/reject-card";
 import { AgentMark, Badge } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
-import { compactRub, days, dealStatusLabel, deliveryLine, qty, rub, when } from "@/lib/format";
+import { compactRub, days, dealOutcomeLabel, deliveryLine, qty, rub, when } from "@/lib/format";
 import { partnerDossier } from "@/lib/partner-context";
 import { autoPassVerdict } from "@/lib/policy";
 import { useStore } from "@/lib/store";
@@ -15,7 +17,7 @@ import type { Actor, Deal } from "@/lib/types";
 
 export default function DealRoomPage() {
   const { id } = useParams<{ id: string }>();
-  const { deals, orders, reputations, policies, approveDeal, rejectDeal, company } = useStore();
+  const { deals, orders, reputations, policies, approveDeal, rejectDeal, acceptSpec, company } = useStore();
   const deal = deals.find((d) => d.id === id);
 
   if (!deal) {
@@ -31,11 +33,12 @@ export default function DealRoomPage() {
 
   return (
     <Room
-      key={deal.id}
+      key={`${deal.id}-${deal.status}-${deal.messages.length}`}
       deal={deal}
       companyId={company.id}
       onApprove={approveDeal}
       onReject={rejectDeal}
+      onAcceptSpec={acceptSpec}
       verdict={autoPassVerdict(deal, orders, reputations, policies)}
       sellerDossier={partnerDossier(deal.buyerId, deal.sellerId, deals, orders, reputations)}
       buyerDossier={partnerDossier(deal.sellerId, deal.buyerId, deals, orders, reputations)}
@@ -48,6 +51,7 @@ function Room({
   companyId,
   onApprove,
   onReject,
+  onAcceptSpec,
   verdict,
   sellerDossier,
   buyerDossier,
@@ -56,6 +60,7 @@ function Room({
   companyId: string;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
+  onAcceptSpec: (id: string) => void;
   verdict: ReturnType<typeof autoPassVerdict>;
   sellerDossier: ReturnType<typeof partnerDossier>;
   buyerDossier: ReturnType<typeof partnerDossier>;
@@ -75,13 +80,13 @@ function Room({
 
   const visible = deal.messages.slice(0, shown);
   const playing = deal.playback && shown < deal.messages.length;
-  const canDecide =
-    !playing &&
-    (deal.status === "agreed" || deal.status === "countering") &&
-    (companyId === deal.buyerId || companyId === deal.sellerId);
+  const party = companyId === deal.buyerId || companyId === deal.sellerId;
+  const isSeller = companyId === deal.sellerId;
+  const canApprove = !playing && deal.status === "agreed" && party;
+  const canWalkAway = !playing && (deal.status === "agreed" || deal.status === "countering") && party;
 
   const span = Math.max(deal.listPrice - deal.floorPrice, deal.listPrice * 0.12);
-  const min = deal.floorPrice - span * 0.05;
+  const min = (isSeller ? deal.floorPrice : Math.min(deal.currentPrice, deal.listPrice)) - span * 0.05;
   const max = deal.listPrice + span * 0.08;
   const pct = (v: number) => Math.min(100, Math.max(0, ((v - min) / (max - min)) * 100));
 
@@ -93,7 +98,7 @@ function Room({
         </Link>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Badge tone={deal.status === "rejected" ? "terra" : deal.status === "approved" ? "moss" : "live"}>
-            {playing ? "Агенты переписываются" : dealStatusLabel(deal.status)}
+            {playing ? "Агенты переписываются" : dealOutcomeLabel(deal)}
           </Badge>
           {deal.voicedBy ? <Badge tone="brass">{deal.voicedBy}</Badge> : null}
           <span className="font-mono text-[11px] text-muted">
@@ -130,18 +135,44 @@ function Room({
           <p className="mt-6 font-mono text-[11px] text-brass">агенты печатают…</p>
         )}
 
-        {canDecide && (
+        {!playing && deal.status === "open" && deal.specFit && deal.specFit !== "match" && party && (
+          <div className="mt-8 space-y-3">
+            <p className="border border-brass/40 bg-surface px-4 py-3 text-[13px] text-brass">
+              {deal.specFit === "mismatch"
+                ? "Спецификация противоречит заявке. Агент не торгует. Человек может снять позицию или сознательно принять предмет — тогда откроется торг."
+                : "Спецификация не закрывает все условия заявки. Агент не торгует, пока человек не подтвердит предмет."}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => onAcceptSpec(deal.id)}
+                className="rounded-full bg-brass px-5 py-2.5 text-[13px] font-medium text-bg"
+              >
+                Принять предмет и торговать
+              </button>
+              <button
+                type="button"
+                onClick={() => onReject(deal.id)}
+                className="rounded-full border border-line px-5 py-2.5 text-[13px] text-muted hover:text-terra"
+              >
+                Снять позицию
+              </button>
+            </div>
+          </div>
+        )}
+
+        {canApprove && (
           <div className="mt-8 space-y-3">
             {verdict.ok ? (
               <p className="border border-moss/40 bg-surface px-4 py-3 text-[13px] text-moss">
                 Допуск совпал: {verdict.why}. Можно утвердить вручную или оставить политике — при смене режима
                 колокольчик снимет это с очереди.
               </p>
-            ) : deal.status === "agreed" ? (
+            ) : (
               <p className="border border-brass/40 bg-surface px-4 py-3 text-[13px] text-brass">
                 Автопрохода нет: {verdict.why}. Колокольчик зовёт человека.
               </p>
-            ) : null}
+            )}
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
@@ -158,6 +189,21 @@ function Room({
                 Отклонить
               </button>
             </div>
+          </div>
+        )}
+        {!canApprove && canWalkAway && deal.status === "countering" && (
+          <div className="mt-8 space-y-3">
+            <p className="border border-brass/40 bg-surface px-4 py-3 text-[13px] text-brass">
+              Пакет ещё не сошёлся. Утверждать нечего — либо агенты дожимают торг до общего комплекта, либо стороны
+              расходятся.
+            </p>
+            <button
+              type="button"
+              onClick={() => onReject(deal.id)}
+              className="rounded-full border border-line px-5 py-2.5 text-[13px] text-muted hover:text-terra"
+            >
+              Разойтись — сделка не состоялась
+            </button>
           </div>
         )}
         {deal.status === "approved" && (
@@ -177,9 +223,18 @@ function Room({
           </p>
         )}
         {deal.status === "rejected" && !playing && (
-          <p className="mt-8 border border-terra/30 bg-surface px-4 py-3 text-[14px] text-terra">
-            Мандаты не пересеклись — или человек отклонил. Агент может открыть заявку другому поставщику.
-          </p>
+          <div className="mt-8">
+            <RejectCardView
+              title="комната закрыта"
+              card={{
+                fact:
+                  deal.rejectReason === "item_mismatch"
+                    ? "Предмет снят: спецификация не закрыла заявку, торг не открывался."
+                    : "Стороны разошлись — сделка не состоялась.",
+                nextStep: "Закупщик может открыть заявку другому поставщику.",
+              }}
+            />
+          </div>
         )}
       </section>
 
@@ -192,16 +247,22 @@ function Room({
           <div className="relative mt-6 h-2 rounded-full bg-line">
             <div
               className="absolute top-0 h-2 rounded-full bg-brass/40"
-              style={{ left: `${pct(deal.floorPrice)}%`, width: `${Math.max(4, pct(deal.listPrice) - pct(deal.floorPrice))}%` }}
+              style={{
+                left: `${pct(isSeller ? deal.floorPrice : Math.min(deal.currentPrice, deal.listPrice))}%`,
+                width: `${Math.max(
+                  4,
+                  pct(deal.listPrice) - pct(isSeller ? deal.floorPrice : Math.min(deal.currentPrice, deal.listPrice)),
+                )}%`,
+              }}
             />
-            <Mark left={pct(deal.floorPrice)} label="пол" />
+            {isSeller ? <Mark left={pct(deal.floorPrice)} label="пол" /> : null}
             <Mark left={pct(deal.currentPrice)} label="сейчас" accent />
             <Mark left={pct(deal.listPrice)} label="лист" />
           </div>
           <dl className="mt-10 grid grid-cols-2 gap-3 text-[13px]">
             <Pair k="Лист" v={rub(deal.listPrice)} />
             <Pair k="Текущая" v={rub(deal.currentPrice)} />
-            <Pair k="Пол продавца" v={rub(deal.floorPrice)} />
+            {isSeller ? <Pair k="Пол продавца" v={rub(deal.floorPrice)} /> : null}
             <Pair k="Сумма" v={compactRub(deal.currentPrice * deal.qty)} />
             <Pair k="Срок" v={days(deal.leadDays)} />
             <Pair k="Предоплата" v={`${deal.prepayPct}%`} />
@@ -221,7 +282,22 @@ function Room({
         </div>
 
         <div className="border border-line bg-surface p-5">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted">Почему этот подбор</p>
+          <SpecSheet
+            product={product}
+            check={
+              deal.specFit
+                ? {
+                    fit: deal.specFit,
+                    hits: deal.specHits ?? [],
+                    gaps: deal.specGaps ?? [],
+                    clashes: deal.specClashes ?? [],
+                  }
+                : undefined
+            }
+          />
+        </div>
+
+        <div className="border border-line bg-surface p-5">
           <ul className="mt-3 space-y-1 text-[13px] text-muted">
             {deal.matchReasons.map((r) => (
               <li key={r}>· {r}</li>

@@ -1,6 +1,6 @@
 export const OLLAMA_HOST = process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434";
 
-export const DEFAULT_MODEL = "qwen2.5:14b";
+export const DEFAULT_OLLAMA_MODEL = "qwen2.5:14b";
 
 export const OLLAMA_MODELS = [
   { id: "qwen2.5:14b", label: "Qwen 2.5 14B", hint: "по умолчанию, быстрее" },
@@ -11,9 +11,9 @@ export const OLLAMA_MODELS = [
   { id: "llama3.2:3b", label: "Llama 3.2 3B", hint: "черновик" },
 ] as const;
 
-export function allowedModel(id: string): string {
+export function allowedOllamaModel(id: string): string {
   const t = id.trim();
-  if (!t || t.length > 80 || /[\s<>]/.test(t)) return DEFAULT_MODEL;
+  if (!t || t.length > 80 || /[\s<>]/.test(t)) return DEFAULT_OLLAMA_MODEL;
   return t;
 }
 
@@ -44,7 +44,7 @@ export async function ollamaChat(opts: {
       headers: { "Content-Type": "application/json" },
       signal: ctrl.signal,
       body: JSON.stringify({
-        model: allowedModel(opts.model),
+        model: allowedOllamaModel(opts.model),
         stream: false,
         format: opts.json === false ? undefined : "json",
         options: { temperature: 0.35, num_ctx: 8192 },

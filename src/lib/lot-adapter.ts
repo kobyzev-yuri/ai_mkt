@@ -60,42 +60,68 @@ function numRu(raw: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function splitRow(line: string, sep: string): string[] {
+  return line.split(sep).map((c) => c.trim().replace(/^"|"$/g, ""));
+}
+
+function headerIndex(header: string[], aliases: string[]): number {
+  const norm = (s: string) => s.replace(/\s/g, "").toLowerCase();
+  const cells = header.map(norm);
+  for (const alias of aliases) {
+    const i = cells.indexOf(norm(alias));
+    if (i >= 0) return i;
+  }
+  return -1;
+}
+
 export function parse1CCsv(text: string): ExternalLotRow[] {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
-  const header = lines[0].split(";").map((h) => h.trim());
-  const idx = (name: string) => header.indexOf(name);
+  const sep = lines[0].includes(";") || !lines[0].includes("\t") ? ";" : "\t";
+  const header = splitRow(lines[0], sep);
+  const at = (cells: string[], aliases: string[]) => {
+    const i = headerIndex(header, aliases);
+    return i >= 0 ? (cells[i] ?? "").trim() : "";
+  };
   return lines.slice(1).map((line) => {
-    const c = line.split(";");
-    const at = (name: string) => (idx(name) >= 0 ? (c[idx(name)] ?? "").trim() : "");
-    const certs = at("Сертификаты")
+    const c = splitRow(line, sep);
+    const certs = at(c, ["Сертификаты", "Сертификат"])
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
     return {
-      code: at("Код"),
-      name: at("Наименование"),
-      sku: at("Артикул"),
-      qty: numRu(at("Остаток")) ?? 0,
-      unit: at("Ед") || "шт",
-      packSize: numRu(at("Кратность")) ?? 1,
-      price: numRu(at("Цена")),
-      floor: numRu(at("МинЦена")),
-      warehouse: at("Склад"),
-      city: at("Город"),
-      readyDays: Math.max(0, Math.round(numRu(at("СрокДней")) ?? 0)),
-      batchNo: at("Партия"),
+      code: at(c, ["Код", "КодНоменклатуры"]),
+      name: at(c, ["Наименование", "Номенклатура", "НаименованиеНоменклатуры"]),
+      sku: at(c, ["Артикул", "АртикулНоменклатуры", "SKU"]),
+      qty: numRu(at(c, ["Остаток", "Количество", "КоличествоОстаток"])) ?? 0,
+      unit: at(c, ["Ед", "Единица", "ЕдиницаИзмерения"]) || "шт",
+      packSize: numRu(at(c, ["Кратность", "КратностьОтгрузки"])) ?? 1,
+      price: numRu(at(c, ["Цена", "ЦенаПродажи"])),
+      floor: numRu(at(c, ["МинЦена", "МинимальнаяЦена", "ЦенаПол"])),
+      warehouse: at(c, ["Склад", "СкладОстатков"]),
+      city: at(c, ["Город", "ГородСклада"]),
+      readyDays: Math.max(0, Math.round(numRu(at(c, ["СрокДней", "Срок"])) ?? 0)),
+      batchNo: at(c, ["Партия", "Серия", "НомерПартии"]),
       certs,
     };
   });
 }
 
 function catalogOf(catalog?: Product[]): Product[] {
-  return catalog ?? allProducts();
+  const map = new Map(allProducts().map((p) => [p.id, p]));
+  for (const p of catalog ?? []) map.set(p.id, p);
+  return [...map.values()];
+}
+
+function normSku(raw: string): string {
+  return raw.trim().toLowerCase().replace(/^atr-/, "");
 }
 
 function findListing(catalog: Product[], sellerId: string, article: string): Product | undefined {
-  return catalog.find((p) => p.sellerId === sellerId && p.sku === article);
+  const sku = normSku(article);
+  if (!sku) return undefined;
+  const mine = catalog.filter((p) => p.sellerId === sellerId);
+  return mine.find((p) => normSku(p.sku) === sku) ?? catalog.find((p) => normSku(p.sku) === sku && p.sellerId === sellerId);
 }
 
 function collectIssues(

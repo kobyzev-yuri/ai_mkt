@@ -1,5 +1,5 @@
 import { companyById, productById } from "./agents";
-import { extractJson, ollamaChat } from "./ollama";
+import { agentChat, extractJson } from "./llm";
 import { parseNeed } from "./parse-need";
 import type { Deal, Need } from "./types";
 
@@ -15,9 +15,9 @@ const CATEGORIES = [
 export async function enrichNeed(query: string, model: string): Promise<Need> {
   const fallback = parseNeed(query);
   try {
-    const raw = await ollamaChat({
+    const { text: raw } = await agentChat({
       model,
-      timeoutMs: 25_000,
+      timeoutMs: 18_000,
       system:
         "Ты парсер B2B-заявки. Верни только JSON. Не выдумывай числа, которых нет в тексте. budget — целые рубли, qty — число.",
       prompt: `Заявка: «${query}»
@@ -53,6 +53,20 @@ JSON: {"category":string|null,"keywords":string[],"qty":number|null,"unit":strin
   }
 }
 
+export async function parseBuyerNeed(query: string, model: string) {
+  const rules = parseNeed(query);
+  const need = await enrichNeed(query, model);
+  const llm =
+    need.category !== rules.category ||
+    need.qty !== rules.qty ||
+    need.budget !== rules.budget ||
+    need.city !== rules.city ||
+    need.unit !== rules.unit ||
+    need.deadlineDays !== rules.deadlineDays ||
+    need.keywords.join("\0") !== rules.keywords.join("\0");
+  return { need, rules, llm };
+}
+
 export async function voiceDeals(deals: Deal[], model: string): Promise<Deal[]> {
   if (deals.length === 0) return deals;
   const payload = deals.map((d) => {
@@ -66,7 +80,6 @@ export async function voiceDeals(deals: Deal[], model: string): Promise<Deal[]> 
       qty: d.qty,
       unit: product.unit,
       unitPrice: d.currentPrice,
-      floor: d.floorPrice,
       list: d.listPrice,
       prepayPct: d.prepayPct,
       incoterm: d.incoterm,
@@ -80,11 +93,11 @@ export async function voiceDeals(deals: Deal[], model: string): Promise<Deal[]> 
   });
 
   try {
-    const raw = await ollamaChat({
+    const { text: raw, model: voicedModel } = await agentChat({
       model,
-      timeoutMs: 90_000,
+      timeoutMs: 40_000,
       system:
-        "Ты пишешь реплики B2B-агентов на русском: закупка и поставка оптом, партии, паллеты, счета, самовывоз или доставка до покупателя. Цифры, статусы и порядок реплик из черновика менять нельзя. Не добавляй и не удаляй реплики. Стиль — деловая переписка, без канцелярита и без эмодзи. Верни JSON.",
+        "Ты пишешь реплики B2B-агентов на русском: закупка и поставка оптом, партии, паллеты, счета, самовывоз или доставка до покупателя. Цифры, статусы и порядок реплик из черновика менять нельзя. Не добавляй и не удаляй реплики. Не называй пол цены или маржу продавца, если их нет в черновике. Стиль — деловая переписка, без канцелярита и без эмодзи. Верни JSON.",
       prompt: `Перепиши тексты реплик, сохранив смысл и все числа.
 Вход: ${JSON.stringify(payload)}
 Выход: {"deals":[{"id":"...","texts":["..."]}]}
@@ -97,7 +110,7 @@ texts.length === draft.length для каждой сделки.`,
       if (!texts || texts.length !== d.messages.length) return { ...d, voicedBy: undefined };
       return {
         ...d,
-        voicedBy: model,
+        voicedBy: voicedModel,
         messages: d.messages.map((m, i) => ({
           ...m,
           text: String(texts[i] ?? m.text).slice(0, 800),

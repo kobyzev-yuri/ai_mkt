@@ -124,21 +124,34 @@ export default function OfficeHomePage() {
           ) : (
             payments.map((o) => {
               const p = productById(o.productId);
+              const buyer = companyById(o.buyerId);
+              const seller = companyById(o.sellerId);
               return (
-                <Link
+                <div
                   key={o.id}
-                  href={`/orders/${o.id}`}
-                  className="flex flex-col gap-2 bg-surface px-4 py-4 hover:bg-surface-2 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-2 bg-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
                     <Badge tone="brass">{orderStatusLabel(o.status)}</Badge>
-                    <p className="mt-2 font-display text-xl">{p.name}</p>
+                    <p className="mt-2 font-display text-xl">
+                      <Link href={`/orders/${o.id}`} className="hover:text-brass-2">
+                        {p.name}
+                      </Link>
+                    </p>
                     <p className="text-[13px] text-muted">
-                      {companyById(o.buyerId).short} → {companyById(o.sellerId).short}
+                      <Link href={`/companies/${buyer.id}`} className="text-brass hover:underline">
+                        {buyer.short}
+                      </Link>
+                      {" → "}
+                      <Link href={`/companies/${seller.id}`} className="text-brass hover:underline">
+                        {seller.short}
+                      </Link>
                     </p>
                   </div>
-                  <p className="font-mono text-[13px] text-brass">{compactRub(o.total)}</p>
-                </Link>
+                  <Link href={`/orders/${o.id}`} className="font-mono text-[13px] text-brass">
+                    {compactRub(o.total)}
+                  </Link>
+                </div>
               );
             })
           )}

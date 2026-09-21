@@ -2,29 +2,31 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import { mergeListings } from "@/lib/catalog";
 import { num, qty, rub } from "@/lib/format";
 import { ADAPTER_MAP, DEMO_1C_CSV, SKIP_OWNER_LABEL, adapt1CRows, parse1CCsv } from "@/lib/lot-adapter";
 import { SELLER_ID } from "@/lib/seed";
+import { useSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
 import type { Product } from "@/lib/types";
 
 export default function SellAdapterPage() {
+  const { account } = useSession();
   const { importAdaptedLots, lots, company } = useStore();
+  const router = useRouter();
   const [csv, setCsv] = useState(DEMO_1C_CSV);
   const [done, setDone] = useState(0);
-  const [catalog, setCatalog] = useState<Product[] | undefined>();
-  const sellerId = company.role === "buyer" ? SELLER_ID : company.id;
+  const [catalogAt, setCatalogAt] = useState(0);
+  const sellerId = account?.companyId || (company.role === "buyer" ? SELLER_ID : company.id);
 
   useEffect(() => {
     fetch("/api/db")
       .then((r) => r.json())
       .then((data: { listings?: Product[] }) => {
-        if (data.listings?.length) {
-          mergeListings(data.listings);
-          setCatalog(data.listings);
-        }
+        if (data.listings?.length) mergeListings(data.listings);
+        setCatalogAt((n) => n + 1);
       })
       .catch(() => {
         /* seed catalog */
@@ -32,12 +34,16 @@ export default function SellAdapterPage() {
   }, []);
 
   const parsed = useMemo(() => parse1CCsv(csv), [csv]);
-  const { ok, skipped } = useMemo(() => adapt1CRows(parsed, sellerId, catalog), [parsed, sellerId, catalog]);
+  const { ok, skipped } = useMemo(
+    () => adapt1CRows(parsed, sellerId),
+    [parsed, sellerId, catalogAt],
+  );
   const live = lots.filter((l) => l.sellerId === sellerId && l.id.startsWith("lot-adapt-")).length;
 
   function apply() {
     importAdaptedLots(ok.map((x) => x.lot));
     setDone(ok.length);
+    router.push("/sell/lots");
   }
 
   return (

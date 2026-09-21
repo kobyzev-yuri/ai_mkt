@@ -111,8 +111,8 @@ export function allowedKinds(order: Order, side: "buyer" | "seller"): IncidentKi
 }
 
 export function reportableKinds(order: Order, side: "buyer" | "seller"): IncidentKind[] {
-  const open = new Set((order.incidents ?? []).filter((i) => i.status !== "resolved").map((i) => i.kind));
-  return allowedKinds(order, side).filter((kind) => !open.has(kind));
+  const used = new Set((order.incidents ?? []).map((i) => i.kind));
+  return allowedKinds(order, side).filter((kind) => !used.has(kind));
 }
 
 export function openIncidents(order: Order): Incident[] {

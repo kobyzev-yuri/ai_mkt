@@ -126,3 +126,28 @@ export function runBargain(opts: {
   if (opts.sellerTactic === "firm") return fail("seller_held", ask, sellerPrepay);
   return fail("no_overlap", ask, sellerPrepay);
 }
+
+export function bargainFailCopy(fail: BargainFail): { fact: string; nextStep: string } {
+  if (fail === "item_mismatch") {
+    return {
+      fact: "Спецификация позиции не закрывает заявку. Агент закупки не торгует этот предмет.",
+      nextStep: "Человек может снять позицию или сознательно принять предмет и тогда откроется торг.",
+    };
+  }
+  if (fail === "floor_above_cap") {
+    return {
+      fact: "Потолок покупателя ниже края продавца. Стороны разошлись — сделка не состоялась.",
+      nextStep: "Закупщик может открыть заявку другому поставщику.",
+    };
+  }
+  if (fail === "seller_held") {
+    return {
+      fact: "Продавец не уступил до потолка. Стороны разошлись — сделка не состоялась.",
+      nextStep: "Либо новый запрос с другим мандатом, либо другой поставщик.",
+    };
+  }
+  return {
+    fact: "Мандаты не пересеклись. Стороны разошлись — сделка не состоялась.",
+    nextStep: "Закупщик может открыть заявку другому поставщику.",
+  };
+}

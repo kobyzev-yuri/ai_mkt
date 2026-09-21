@@ -5,7 +5,7 @@ import { IdeaStub, MessengerPreview } from "@/components/idea-stub";
 import { TradePolicyEditor } from "@/components/trade-policy";
 import { Badge, Stat } from "@/components/ui";
 import { companyById, productById } from "@/lib/agents";
-import { compactRub, dealStatusLabel, deliveryLine, orderStatusLabel, rating } from "@/lib/format";
+import { compactRub, dealOutcomeLabel, deliveryLine, orderStatusLabel, rating } from "@/lib/format";
 import { LEAD_LABEL, sellerLeads } from "@/lib/leads";
 import { partnerDossier } from "@/lib/partner-context";
 import { CONTROL_MODE_LABEL, policyOf } from "@/lib/policy";
@@ -222,7 +222,7 @@ export function Cabinet({ side }: { side: "buy" | "sell" }) {
                               : "live"
                         }
                       >
-                        {dealStatusLabel(d.status)}
+                        {dealOutcomeLabel(d)}
                       </Badge>
                       <p className="mt-2 font-display text-xl">{p.name}</p>
                       <p className="text-[13px] text-muted">

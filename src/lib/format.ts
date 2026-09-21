@@ -1,3 +1,5 @@
+import type { Deal, SpecFit } from "./types";
+
 export function rub(n: number): string {
   const digits = Number.isInteger(Math.round(n * 100) / 100) && Number.isInteger(n) ? 0 : 2;
   return new Intl.NumberFormat("ru-RU", {
@@ -52,7 +54,9 @@ export function when(iso: string): string {
   }).format(d);
 }
 
-export function dealStatusLabel(status: string): string {
+export function dealStatusLabel(status: string, specFit?: SpecFit): string {
+  if (status === "open" && specFit === "partial") return "Уточнить спецификацию";
+  if (status === "open" && specFit === "mismatch") return "Спека не сошлась";
   switch (status) {
     case "open":
       return "Запрос отправлен";
@@ -67,6 +71,11 @@ export function dealStatusLabel(status: string): string {
     default:
       return status;
   }
+}
+
+export function dealOutcomeLabel(deal: Pick<Deal, "status" | "specFit" | "passedByPolicy">): string {
+  if (deal.passedByPolicy) return "по допуску";
+  return dealStatusLabel(deal.status, deal.specFit);
 }
 
 export function orderStatusLabel(status: string): string {

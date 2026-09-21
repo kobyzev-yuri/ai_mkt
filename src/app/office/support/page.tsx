@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui";
 import { mergeAccounts } from "@/lib/accounts";
 import type { CreateCompanyInput, DbSnapshot } from "@/lib/db/types";
 import { mergeCompanies } from "@/lib/roster";
+import { companyMatchesQuery } from "@/lib/search";
 
 export default function OfficeSupportPage() {
   const [snap, setSnap] = useState<DbSnapshot | null>(null);
@@ -21,6 +23,8 @@ export default function OfficeSupportPage() {
     pin: "",
   });
   const [createdPin, setCreatedPin] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "buyer" | "seller">("all");
 
   function load() {
     fetch("/api/db")
@@ -73,7 +77,14 @@ export default function OfficeSupportPage() {
     }
   }
 
-  const orgs = (snap?.companies ?? []).filter((c) => c.role !== "both");
+  const orgs = useMemo(() => {
+    const rows = snap?.companies ?? [];
+    return rows.filter((c) => {
+      if (roleFilter === "buyer" && c.role === "seller") return false;
+      if (roleFilter === "seller" && c.role === "buyer") return false;
+      return companyMatchesQuery(c, q);
+    });
+  }, [snap, q, roleFilter]);
   const pinOf = (companyId: string) => snap?.accounts.find((a) => a.companyId === companyId)?.pin;
 
   return (
@@ -178,8 +189,10 @@ export default function OfficeSupportPage() {
                       {c.role === "seller" ? "поставщик" : "закупщик"}
                     </Badge>
                     {pinOf(c.id) ? (
-                      <span className="font-mono text-[11px] text-muted">вход {pinOf(c.id)}</span>
-                    ) : null}
+                      <span className="font-mono text-[11px] text-brass">вход {pinOf(c.id)}</span>
+                    ) : (
+                      <span className="font-mono text-[11px] text-terra">нет логина</span>
+                    )}
                   </div>
                   <p className="mt-2 font-display text-xl">{c.name}</p>
                   <p className="text-[13px] text-muted">

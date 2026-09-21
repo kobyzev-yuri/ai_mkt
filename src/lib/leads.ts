@@ -14,6 +14,7 @@ export function leadTag(
 ): LeadTag {
   const firm = seller ?? companyById(deal.sellerId);
   const policy = policyOf(firm, policies);
+  if (deal.status === "open") return "needs-you";
   if (deal.status === "rejected") return "missed";
   if (deal.status === "approved") return "won";
   if (deal.status === "agreed") {

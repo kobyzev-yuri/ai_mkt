@@ -94,7 +94,7 @@ export default function ConceptPage() {
             ["01 Принципалы", "Мандат и политика (пошагово / допуски / автопилот), оплата, приёмка, эскалация. Необратимое — человек, кроме утверждения по допуску."],
             ["02 Агенты сторон", "Закупка шлёт запрос и отвечает встречным. Поставка держит пол маржи, партии, самовывоз или доставку."],
             ["03 Оркестратор", "Сценарии S1–S3: разложить задачу, назначить роли, ждать подтверждение человека или факт."],
-            ["04 Движок мира", "Подбор, упаковка, пол цены, резерв партий, сроки. Детерминированные числа."],
+            ["04 Движок мира", "Подбор полным проходом витрины, сверка спецификации, упаковка, пол цены, резерв, сроки. Детерминированные числа. Векторный поиск спеки — слой масштаба, не этот контур."],
             ["05 Языковая модель", "Разбор фразы и формулировки реплик. Нельзя сменить цену, количество, статус и число реплик."],
             ["06 Доверие", "Поставки и оплаты в срок, претензии, обход. Удар по рейтингу — только решение площадки."],
           ].map(([t, d]) => (
@@ -104,6 +104,105 @@ export default function ConceptPage() {
             </li>
           ))}
         </ol>
+      </section>
+
+      <section className="mt-16">
+        <h2 className="font-display text-4xl">Масштаб: поиск, когда витрина вырастет</h2>
+        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted">
+          Сейчас подбор — полный проход движка и сверка полей спецификации с заявкой. Этого хватает на прототип. RAG и
+          эмбеддинги спеки появляются только когда из 1С приедут тысячи SKU. Это идеология масштаба, не живой API.
+        </p>
+        <div className="mt-8 border border-dashed border-brass/35 bg-surface p-6">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-brass">после MVP · не в заявке до 31 октября</p>
+          <h3 className="mt-3 font-display text-2xl">Гибридный набор кандидатов</h3>
+          <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted">
+            Номенклатура и техническая спецификация попадают в индекс. Заявку ищут сразу по ключам, по свободному
+            количеству на складе отгрузки и по близости эмбеддинга спеки. Модель по-прежнему не выбирает, чем торговать.
+          </p>
+          <ol className="mt-6 space-y-3 text-[14px] leading-relaxed text-muted">
+            <li>
+              <span className="font-mono text-[11px] text-brass">01</span> Фильтр партий: остаток ≥ объёма после
+              кратности, город склада, срок лота. Qty и место в вектор не кладут.
+            </li>
+            <li>
+              <span className="font-mono text-[11px] text-brass">02</span> Ключи номенклатуры: SKU, ГОСТ, размер,
+              диаметр, класс.
+            </li>
+            <li>
+              <span className="font-mono text-[11px] text-brass">03</span> Близость спецификации: карточка = название +
+              единица + исчерпывающая спека. Ранжирует «зимний комплект» выше ботинок, не открывает торг.
+            </li>
+            <li>
+              <span className="font-mono text-[11px] text-brass">04</span> Сверка полей как сейчас: спека закрыла заявку
+              — агенты торгуются; не вполне — человек.
+            </li>
+            <li>
+              <span className="font-mono text-[11px] text-brass">05</span> Мандат считает цену и статус. RAG здесь —
+              retrieve по индексу, не generate SKU.
+            </li>
+          </ol>
+          <p className="mt-5 font-mono text-[11px] text-muted">
+            Не делаем в этом этапе: Elasticsearch, отдельный поисковый сервис, эмбеддинги в комнату сделки.
+          </p>
+        </div>
+      </section>
+
+      <section className="mt-16">
+        <h2 className="font-display text-4xl">Atrium Deal Act</h2>
+        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted">
+          В MVP торг уже не чат: заявка, предложение, встречное, согласие или отказ. Реплика модели не двигает цену.
+          Deal Act — расширение, когда агент закупки и агент поставки станут чужими программами. Общий словарь актов,
+          не общий промпт.
+        </p>
+        <div className="mt-8 border border-dashed border-brass/35 bg-surface p-6">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-brass">
+            расширение MVP · не в заявке до 31 октября
+          </p>
+          <h3 className="mt-3 font-display text-2xl">Конверт на шине</h3>
+          <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted">
+            Каждое действие — JSON: тип акта, стороны, комната, payload с числами, свободный <span className="font-mono text-paper">note</span>{" "}
+            для модели. Площадка принимает payload или отбрасывает. Текст в note истиной не становится.
+          </p>
+          <div className="mt-6 overflow-x-auto border border-line">
+            <table className="w-full min-w-[640px] text-left text-[13px]">
+              <thead className="bg-bg font-mono text-[10px] uppercase tracking-widest text-muted">
+                <tr>
+                  <th className="px-4 py-3 font-normal">Акт</th>
+                  <th className="px-4 py-3 font-normal">Кто</th>
+                  <th className="px-4 py-3 font-normal">Смысл</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line text-muted">
+                {[
+                  ["RFQ", "агент закупки", "предмет, qty после кратности, потолок, срок, город"],
+                  ["SPEC_CHECK", "закупка / шина", "спека закрыла заявку — иначе ждать человека"],
+                  ["SPEC_ACCEPT", "человек", "предмет годится при неполной спеке"],
+                  ["OFFER", "агент поставки", "цена ≥ пола, партии, срок, предоплата, склад"],
+                  ["COUNTER", "агент закупки", "цена ≤ потолка; SKU и qty не меняют"],
+                  ["ACCEPT", "движок мандата", "пакет сошёлся; склад и деньги ещё нет"],
+                  ["REJECT", "движок / сторона", "пол выше потолка, удержали край, не тот предмет"],
+                  ["ESCALATE", "агент → человек", "колокольчик: мандат или спека не закрылись"],
+                  ["REMEDY", "агент инцидента", "только id из плейбука, новый откат выдумать нельзя"],
+                ].map(([act, who, meaning]) => (
+                  <tr key={act} className="bg-surface">
+                    <td className="px-4 py-3 font-mono text-brass">{act}</td>
+                    <td className="px-4 py-3">{who}</td>
+                    <td className="px-4 py-3">{meaning}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <ul className="mt-6 space-y-2 text-[14px] leading-relaxed text-muted">
+            <li>Один акт — одно изменение состояния. «В чате договорились» не существует.</li>
+            <li>Параллельные комнаты не видят чужих цен.</li>
+            <li>ACCEPT не резервирует склад и не списывает деньги.</li>
+            <li>Журнал: кто, какой акт, какой payload, принял ли движок.</li>
+          </ul>
+          <p className="mt-5 font-mono text-[11px] text-muted">
+            Не делаем в этом этапе: публичный API актов, чужие агенты на шине, отдельный брокер сообщений.
+          </p>
+        </div>
       </section>
 
       <section className="mt-16">
@@ -252,6 +351,10 @@ export default function ConceptPage() {
             </tbody>
           </table>
         </div>
+        <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-muted">
+          Те же действия в JSON-конверте для чужих агентов — Atrium Deal Act (блок выше). В этом релизе шина актов не
+          публикуется: переходы считает движок внутри комнаты.
+        </p>
       </section>
 
       <section className="mt-16 border border-brass/30 bg-surface p-6">

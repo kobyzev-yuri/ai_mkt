@@ -7,7 +7,7 @@ import { AlertsBell } from "@/components/alerts-bell";
 import { deskHome, deskLabel, isDemoPath, isPublicPath, navWorkspaces, pathAllowed } from "@/lib/accounts";
 import { isDemoApp } from "@/lib/app-mode";
 import { navItemActive } from "@/lib/nav";
-import { OLLAMA_MODELS } from "@/lib/ollama";
+import { TIMEWEB_MODELS } from "@/lib/llm-models";
 import { useSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
 import { SUBNAV, WORKSPACES, workspaceFromPath } from "@/lib/workspace";
@@ -30,7 +30,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const { account, hydrated, signOut } = useSession();
   const { company, llmModel, setLlmModel } = useStore();
   const [models, setModels] = useState<{ id: string; label: string }[]>(
-    OLLAMA_MODELS.map((m) => ({ id: m.id, label: m.label })),
+    TIMEWEB_MODELS.map((m) => ({ id: m.id, label: m.label })),
   );
   const login = pathname.startsWith("/login");
   const demoApp = isDemoApp();

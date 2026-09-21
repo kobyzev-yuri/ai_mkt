@@ -226,7 +226,7 @@ export default function HomePage() {
           <div className="mx-auto max-w-6xl px-5 py-16">
             <h2 className="font-display text-4xl">Попробуйте живой запрос</h2>
             <p className="mt-3 max-w-xl text-muted">
-              Агент разберёт фразу через локальный Ollama, найдёт партии и откроет комнаты. Цены считает движок мандата.
+              Агент разберёт фразу через Timeweb AI Gateway, найдёт партии и откроет комнаты. Цены считает движок мандата.
             </p>
             <ul className="mt-8 space-y-3">
               {DEMO_PROMPTS.map((q) => (

@@ -23,6 +23,13 @@ export function ProductCard({ product }: { product: Product }) {
         {product.name}
       </h3>
       <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-muted">{product.description}</p>
+      {product.specs.Вид || product.specs.Сезон ? (
+        <p className="mt-2 font-mono text-[11px] text-brass">
+          {[product.specs.Вид, product.specs.Сезон, product.specs.Рост ? `рост ${product.specs.Рост}` : null]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      ) : null}
       <div className="mt-auto flex items-end justify-between pt-5">
         <div>
           <p className="font-display text-2xl text-brass-2">

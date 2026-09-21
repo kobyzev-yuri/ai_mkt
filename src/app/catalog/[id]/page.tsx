@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { SpecSheet } from "@/components/spec-sheet";
 import { Badge, CategorySeal } from "@/components/ui";
 import { days, num, rating, rub } from "@/lib/format";
 import { freeQty } from "@/lib/inventory";
@@ -38,13 +39,10 @@ export default function ProductPage() {
           </div>
           <h1 className="mt-5 font-display text-5xl leading-tight">{product.name}</h1>
           <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-muted">{product.description}</p>
-          <dl className="mt-8 grid grid-cols-2 gap-px border border-line bg-line">
-            {Object.entries(product.specs).map(([k, v]) => (
-              <div key={k} className="bg-surface px-4 py-3">
-                <dt className="font-mono text-[10px] uppercase tracking-wider text-muted">{k}</dt>
-                <dd className="mt-1 text-[14px]">{v}</dd>
-              </div>
-            ))}
+          <div className="mt-8">
+            <SpecSheet product={product} />
+          </div>
+          <dl className="mt-4 grid grid-cols-2 gap-px border border-line bg-line">
             <div className="bg-surface px-4 py-3">
               <dt className="font-mono text-[10px] uppercase tracking-wider text-muted">Кратность</dt>
               <dd className="mt-1">

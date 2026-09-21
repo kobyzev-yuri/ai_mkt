@@ -100,27 +100,18 @@ export function IncidentRoom({
         </section>
       )}
 
-      {!closed && kinds.length > 0 ? (
+      {!closed && kinds.length > 0 && live.length === 0 ? (
         <section>
           <h2 className="font-display text-3xl">Зафиксировать факт</h2>
           <p className="mt-2 max-w-xl text-[14px] text-muted">
-            Только то, что возможно на текущем шаге контура. Обход предложит агент другой стороны — не вы и не этот список.
+            Сначала факт, потом обход. Нажмите только то, что случилось. Агент предложит обход на следующем шаге — не в
+            этом списке.
           </p>
           <ul className="mt-5 grid gap-3 sm:grid-cols-2">
-            {kinds.map((kind) => {
-              const book = playbookOf(kind);
-              const proposed = book.workaround(order);
-              const unwind = book.unwindHint(order);
-              return (
+            {kinds.map((kind) => (
               <li key={kind} className="border border-line bg-surface p-4">
                 <p className="font-display text-xl">{INCIDENT_LABEL[kind]}</p>
                 <p className="mt-2 text-[13px] leading-relaxed text-muted">{KIND_LIFE[kind]}</p>
-                <p className="mt-2 text-[12px] leading-relaxed text-brass-2">Обход агента: {proposed.text}</p>
-                {unwind ? (
-                  <p className="mt-1 text-[12px] leading-relaxed text-terra">Если отклонить: {unwind}</p>
-                ) : (
-                  <p className="mt-1 text-[12px] leading-relaxed text-muted">Отката нет — только обход, заказ остаётся живым.</p>
-                )}
                 <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-muted">{KIND_WHEN[kind]}</p>
                 <button
                   type="button"
@@ -130,10 +121,16 @@ export function IncidentRoom({
                   Зафиксировать
                 </button>
               </li>
-              );
-            })}
+            ))}
           </ul>
         </section>
+      ) : null}
+
+      {live.length > 0 && !office ? (
+        <p className="text-[14px] text-muted">
+          Факт уже в контуре. Сначала примите обход или отклоните его на площадку — новый факт откроется после закрытия
+          этого.
+        </p>
       ) : null}
 
       {!closed && side && kinds.length === 0 && live.length === 0 ? (
